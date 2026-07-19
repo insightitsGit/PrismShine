@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "prismshine"
+version = "0.0.1"
+description = "Anti-hallucination verdict engine for the Insight agent stack: trace forensics + grounding verification in one auditable gate."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Insight IT Solutions LLC", email = "insightits.info@gmail.com" }]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+coverage = ["prismlang>=0.1.2"]                     # shared ONNX encoder session + model_id()
+spans = ["onnxruntime>=1.17", "tokenizers>=0.15", "huggingface-hub>=0.23"]  # Tier-3 span classifier
+chorusgraph = ["chorusgraph>=1.3.0"]                # richest runtime plugin (ADR-008 interceptors, chunk-vector read path)
+langgraph = ["langgraph>=0.2"]                      # LangGraph runtime plugin
+guard = ["prismguard>=0.1.7"]                       # input/output symmetry
+judge-openai = ["openai>=1.30"]                     # Tier-4 escalation (opt-in)
+judge-gemini = ["google-genai>=1.0"]                # Tier-4 escalation (opt-in)
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.4"]
+
+[project.scripts]
+prismshine = "prismshine.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/insightitsGit/PrismShine"
+
+[tool.hatch.build.targets.wheel]
+packages = ["prismshine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.report]
+fail_under = 80
