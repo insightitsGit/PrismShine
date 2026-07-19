@@ -1,0 +1,30 @@
+# Local option: docker compose -f bench/compose.yaml up --build
+# (Azure path: bench/azure/deploy.ps1 — same images via az acr build + ACI)
+services:
+  prismshine-fast:
+    build: { context: .., dockerfile: bench/shims/prismshine/Dockerfile }
+    ports: ["8001:8000"]
+    cpus: 4
+    mem_limit: 8g
+
+  hhem:
+    build: { context: shims/hhem }
+    ports: ["8002:8000"]
+    cpus: 4
+    mem_limit: 8g
+
+  ollama:
+    build: { context: shims/ollama }
+    ports: ["11434:11434"]
+    cpus: 3
+    mem_limit: 10g
+
+  ragas:
+    build: { context: shims/ragas }
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.2:3b-instruct-q4_K_M
+    ports: ["8003:8000"]
+    cpus: 1
+    mem_limit: 2g
+    depends_on: [ollama]

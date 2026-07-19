@@ -27,13 +27,24 @@ pytest tests/benchmarks -m benchmark
 pytest tests/benchmarks
 ```
 
-Optional full grounding (network):
+Optional full grounding (network) + pinned ONNX Tier-3:
 
 ```bash
 set PRISMSHINE_BENCH_FULL=1
-pip install datasets
+set PRISMSHINE_SPAN_ONNX=C:\path\to\model.onnx
+set PRISMSHINE_SPAN_TOKENIZER=C:\path\to\tokenizer.json
+pip install datasets "prismshine[spans]"
 prismshine bench --suite grounding --report benchmarks/reports
 ```
+
+Feedback loop (FP/FN → calibrate):
+
+```bash
+prismshine feedback bundle.json --label hallucination --out benchmarks/feedback.jsonl
+prismshine calibrate benchmarks/feedback.jsonl --mode feedback --profile clinical --out cal.json
+```
+
+Offline hard-effect cases (negation / entity / finance / legal) always run inside the grounding suite via `prismshine.bench.ragtruth.hard_effect_pairs`.
 
 ## Gates (must pass for marketing)
 

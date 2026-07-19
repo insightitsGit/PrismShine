@@ -190,8 +190,19 @@ def apply_calibration_receipt(
             policy.tau_floor = float(thresholds["tau_floor"])
         if "tau_tok" in thresholds:
             policy.tau_tok = float(thresholds["tau_tok"])
+        b0, b1, b2 = policy.bands
+        if "fused_pass" in thresholds:
+            b0 = float(thresholds["fused_pass"])
         if "fused_flag" in thresholds:
-            b0, b1, b2 = policy.bands
-            policy.bands = (b0, float(thresholds["fused_flag"]), b2)
+            b1 = float(thresholds["fused_flag"])
+        if "fused_act" in thresholds:
+            b2 = float(thresholds["fused_act"])
+        # Keep ordered bands
+        b0, b1, b2 = sorted((b0, b1, b2))
+        if b0 == b1:
+            b1 = min(b0 + 0.05, 0.99)
+        if b1 == b2:
+            b2 = min(b1 + 0.05, 1.0)
+        policy.bands = (b0, b1, b2)
     policy.threshold_status = status
     return policy

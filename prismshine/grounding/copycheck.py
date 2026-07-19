@@ -25,8 +25,44 @@ _ID_RE = re.compile(
     r"[A-Z0-9]{2,}-\d{3,}[A-Z0-9]*))\b"
 )
 _ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+# Single-token proper nouns (places, orgs) — not sentence-initial stop words
+_PROPER_RE = re.compile(r"\b([A-Z][a-z]{2,})\b")
+_PROPER_STOP = frozenset(
+    {
+        "The",
+        "This",
+        "That",
+        "These",
+        "Those",
+        "There",
+        "Then",
+        "When",
+        "Where",
+        "What",
+        "Which",
+        "While",
+        "After",
+        "Before",
+        "During",
+        "According",
+        "However",
+        "Therefore",
+        "Moreover",
+        "In",
+        "On",
+        "At",
+        "For",
+        "And",
+        "But",
+        "Or",
+        "If",
+        "As",
+        "A",
+        "An",
+    }
+)
 
-WEIGHTS = {"number": 3.0, "currency": 3.0, "date": 2.0, "id": 3.0, "entity": 1.0}
+WEIGHTS = {"number": 3.0, "currency": 3.0, "date": 2.0, "id": 3.0, "entity": 1.5}
 
 
 @dataclass
@@ -128,9 +164,29 @@ def extract_facts(text: str, lexicon: set[str] | None = None) -> list[Fact]:
         )
     for m in _ENTITY_RE.finditer(text):
         raw = m.group(1)
-        if lexicon and raw.lower() not in {x.lower() for x in lexicon}:
-            # still include capitalized multi-word entities
-            pass
+        facts.append(
+            Fact(
+                kind="entity",
+                raw=raw,
+                normalized=raw.lower(),
+                start=m.start(),
+                end=m.end(),
+            )
+        )
+    # Single-token proper nouns (Asia vs Europe, Contoso, etc.)
+    for m in _PROPER_RE.finditer(text):
+        raw = m.group(1)
+        if raw in _PROPER_STOP:
+            continue
+        # Skip if already captured as multi-word entity span
+        if any(f.kind == "entity" and f.start <= m.start() < f.end for f in facts):
+            continue
+        # Skip likely sentence starts (position 0 or after .!?)
+        if m.start() == 0:
+            continue
+        prev = text[: m.start()].rstrip()
+        if not prev or prev[-1] in ".!?\n":
+            continue
         facts.append(
             Fact(
                 kind="entity",

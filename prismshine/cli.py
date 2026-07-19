@@ -43,6 +43,27 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if verdict.decision in {"pass", "flag"} else 1
 
 
+def cmd_feedback(args: argparse.Namespace) -> int:
+    from prismshine.feedback import record_feedback
+
+    path = Path(args.bundle)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if "bundle" in data:
+        data = data["bundle"]
+    bundle, _ = bundle_from_dict(data)
+    gate = ShineGate.build(profile=getattr(args, "profile", "default"))
+    verdict = gate.verify(bundle)
+    row = record_feedback(
+        args.out,
+        bundle=bundle,
+        is_hallucination=(args.label == "hallucination"),
+        verdict=verdict,
+        note=args.note,
+    )
+    print(json.dumps(row, indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     gate = ShineGate.build(profile=args.profile, strictness=args.strictness)
     report = calibrate_dir(args.dir, mode=args.mode, gate=gate)
@@ -98,12 +119,35 @@ def main(argv: list[str] | None = None) -> int:
     p_ver.set_defaults(func=cmd_verify)
 
     p_cal = sub.add_parser("calibrate", help="Fit thresholds from a directory of bundles")
-    p_cal.add_argument("dir", help="Directory of JSON bundles")
-    p_cal.add_argument("--mode", choices=["synthetic", "labeled"], default="synthetic")
+    p_cal.add_argument("dir", help="Directory of JSON bundles (or feedback.jsonl for --mode feedback)")
+    p_cal.add_argument(
+        "--mode",
+        choices=["synthetic", "labeled", "feedback"],
+        default="synthetic",
+    )
     p_cal.add_argument("--profile", default="default")
     p_cal.add_argument("--strictness", default="standard")
     p_cal.add_argument("--out", default=None, help="Write report JSON to path")
     p_cal.set_defaults(func=cmd_calibrate)
+
+    p_fb = sub.add_parser(
+        "feedback",
+        help="Record FP/FN labels for calibrate (JSONL)",
+    )
+    p_fb.add_argument("bundle", help="Path to EvidenceBundle JSON")
+    p_fb.add_argument(
+        "--label",
+        required=True,
+        choices=["hallucination", "grounded"],
+        help="Ground-truth label",
+    )
+    p_fb.add_argument(
+        "--out",
+        default="benchmarks/feedback.jsonl",
+        help="JSONL path to append",
+    )
+    p_fb.add_argument("--note", default=None)
+    p_fb.set_defaults(func=cmd_feedback)
 
     p_bench = sub.add_parser(
         "bench",

@@ -22,6 +22,7 @@ DEFAULT_MODEL_CANDIDATES = (
 DEFAULT_ARTIFACT = "lettucedetect-onnx-v1"
 PINNED_ARTIFACT_ENV = "PRISMSHINE_SPAN_ONNX"
 PINNED_MODEL_ENV = "PRISMSHINE_SPAN_MODEL"
+PINNED_TOKENIZER_ENV = "PRISMSHINE_SPAN_TOKENIZER"
 
 
 @dataclass
@@ -52,6 +53,7 @@ class SpanClassifier:
             else ((env_model,) if env_model else DEFAULT_MODEL_CANDIDATES)
         )
         self._pinned_onnx = os.environ.get(PINNED_ARTIFACT_ENV)
+        self._pinned_tokenizer = os.environ.get(PINNED_TOKENIZER_ENV)
         self.tau_tok = tau_tok
         self.cache_dir = Path(cache_dir or Path.home() / ".prismshine" / "models")
         self.allow_lexical_fallback = allow_lexical_fallback
@@ -94,14 +96,37 @@ class SpanClassifier:
                         self._pinned_onnx, providers=["CPUExecutionProvider"]
                     )
                     tok_path = None
-                    tok_candidate = Path(self._pinned_onnx).with_name("tokenizer.json")
-                    if tok_candidate.is_file():
-                        self._tokenizer = Tokenizer.from_file(str(tok_candidate))
-                        tok_path = str(tok_candidate)
-                    if tok_path:
+                    for candidate in (
+                        self._pinned_tokenizer,
+                        str(Path(self._pinned_onnx).with_name("tokenizer.json")),
+                        str(Path(self._pinned_onnx).parent / "tokenizer.json"),
+                    ):
+                        if candidate and Path(candidate).is_file():
+                            self._tokenizer = Tokenizer.from_file(str(candidate))
+                            tok_path = str(candidate)
+                            break
+                    if tok_path is None:
+                        # Pull tokenizer from pinned/default hub model; keep local ONNX weights
+                        for repo in self.model_candidates:
+                            try:
+                                tok_path = hf_hub_download(
+                                    repo_id=repo,
+                                    filename="tokenizer.json",
+                                    cache_dir=str(self.cache_dir),
+                                )
+                                self._tokenizer = Tokenizer.from_file(tok_path)
+                                break
+                            except Exception:  # noqa: BLE001
+                                continue
+                    if self._tokenizer is not None:
                         self.artifact_id = f"pinned@{Path(self._pinned_onnx).name}"
                         self._backend = "onnx"
                         return True
+                    logger.warning(
+                        "pinned ONNX at %s loaded but no tokenizer; "
+                        "set PRISMSHINE_SPAN_TOKENIZER or place tokenizer.json beside the onnx",
+                        self._pinned_onnx,
+                    )
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("pinned ONNX load failed: %s", exc)
 
@@ -220,11 +245,23 @@ class SpanClassifier:
         preload: str,
         candidates: list[Span] | None,
     ) -> list[Span]:
-        """Token-level unsupported: answer tokens absent from preload (for candidates)."""
+        """Token-level unsupported + treat contradiction-cue candidates as unsupported."""
         preload_l = preload.lower()
         spans: list[Span] = []
         if candidates:
             for cand in candidates:
+                # Contradiction cues are mandatory Tier-3: never clear them lexically
+                if "contradiction" in (cand.reason or ""):
+                    spans.append(
+                        Span(
+                            start=cand.start,
+                            end=cand.end,
+                            text=cand.text,
+                            reason="unsupported_span:contradiction_cue",
+                            tier=3,
+                        )
+                    )
+                    continue
                 tokens = cand.text.split()
                 missing = [t for t in tokens if len(t) > 3 and t.lower() not in preload_l]
                 if missing:

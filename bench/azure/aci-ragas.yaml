@@ -1,0 +1,43 @@
+# Multi-container ACI group: ragas shim + pinned ollama judge (same group = localhost)
+# Deployed by deploy.ps1 with placeholders replaced.
+apiVersion: '2021-10-01'
+location: __LOCATION__
+name: __NAME__
+properties:
+  osType: Linux
+  restartPolicy: OnFailure
+  ipAddress:
+    type: Public
+    dnsNameLabel: __DNSLABEL__
+    ports:
+      - port: 8000
+        protocol: TCP
+  imageRegistryCredentials:
+    - server: __ACR_SERVER__
+      username: __ACR_USER__
+      password: __ACR_PASS__
+  containers:
+    - name: ragas
+      properties:
+        image: __ACR_SERVER__/bench/ragas:v1
+        ports:
+          - port: 8000
+        environmentVariables:
+          - name: OLLAMA_URL
+            value: http://localhost:11434
+          - name: OLLAMA_MODEL
+            value: llama3.2:3b-instruct-q4_K_M
+        resources:
+          requests:
+            cpu: 1.0
+            memoryInGB: 2.0
+    - name: ollama
+      properties:
+        image: __ACR_SERVER__/bench/ollama:v1
+        ports:
+          - port: 11434
+        resources:
+          requests:
+            cpu: 3.0
+            memoryInGB: 10.0
+type: Microsoft.ContainerInstance/containerGroups

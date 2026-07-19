@@ -26,7 +26,7 @@ Market context: a 2026 public benchmark (PlaceboBench) measured six major tools 
 
 ## Honest weaknesses (do not paper over)
 
-1. Raw detection accuracy will not lead at v0; LLM-agent products win cue-less contradictions unless Tier 4 is enabled. Counter: Tier-1 beats pure NLI on fabricated numbers; contradiction cues route hard cases to the right tier. Never market "highest accuracy" without benchmark receipts.
+1. Raw detection accuracy will not lead at v0; LLM-agent products win cue-less contradictions unless Tier 4 is enabled. Counter: expanded contradiction lexicon + polarity phrases force Tier-3 (and flag without ONNX/judge); pin `PRISMSHINE_SPAN_ONNX` for real span SotA; domain `calibrate` + `feedback` JSONL close the gap with receipts. Never market "highest accuracy" without `grounding.json` / RAGTruth (`PRISMSHINE_BENCH_FULL=1`).
 2. The full moat requires **wiring** (trace / ledger steps + pre/post hooks via `prismshine.wiring` or ChorusGraph plugins). Without a ledger, Shine is a strong grounding checker — competitive, not category-defining. Richest out-of-the-box inside ChorusGraph; LangGraph/custom achieve parity when authors emit the same evidence.
 3. Distribution: eval platforms own integration mindshare; beachhead = Insight ecosystem + regulated verticals.
 4. English-only at v0; multilingual is post-v0.

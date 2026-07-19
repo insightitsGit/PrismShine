@@ -1,20 +1,20 @@
-"""B2 — Effect-side grounding quality (synthetic + optional RAGTruth)."""
+"""B2 — Effect-side grounding quality (hard corpus + optional RAGTruth + calibrate lift)."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from prismshine.bench.embed import hash_embedder
 from prismshine.bench.metrics import Confusion, auroc
+from prismshine.bench.ragtruth import hard_effect_pairs, try_load_ragtruth
 from prismshine.bench.report import SuiteResult
 from prismshine.evidence.builder import bundle_from_dict
 from prismshine.gate import ShineGate
 from prismshine.grounding.spans import SpanClassifier
 
 
-def _gate() -> ShineGate:
-    return ShineGate.build(embedder=hash_embedder)
+def _gate(profile: str = "default") -> ShineGate:
+    return ShineGate.build(embedder=hash_embedder, profile=profile)
 
 
 def _good_trace() -> list[dict[str, Any]]:
@@ -30,10 +30,8 @@ def _good_trace() -> list[dict[str, Any]]:
 
 
 def synthetic_pairs() -> list[tuple[dict[str, Any], bool]]:
-    """(bundle_dict, is_hallucination) hard cases."""
+    """Legacy synthetic numbers/entities + hard effect corpus."""
     pairs: list[tuple[dict[str, Any], bool]] = []
-
-    # Numbers
     for i in range(5):
         pairs.append(
             (
@@ -71,84 +69,6 @@ def synthetic_pairs() -> list[tuple[dict[str, Any], bool]]:
                 True,
             )
         )
-
-    # Entities / dates
-    pairs.append(
-        (
-            {
-                "run_id": "ent_good",
-                "question": "Who signed the deal?",
-                "answer": "Alice signed the deal on 2024-03-15.",
-                "preload": [
-                    {
-                        "chunk_id": "c1",
-                        "text": "Alice signed the deal on 2024-03-15.",
-                        "source": "retrieval",
-                    }
-                ],
-                "trace": _good_trace(),
-            },
-            False,
-        )
-    )
-    pairs.append(
-        (
-            {
-                "run_id": "ent_bad",
-                "question": "Who signed the deal?",
-                "answer": "Bob signed the deal on 2025-12-01.",
-                "preload": [
-                    {
-                        "chunk_id": "c1",
-                        "text": "Alice signed the deal on 2024-03-15.",
-                        "source": "retrieval",
-                    }
-                ],
-                "trace": _good_trace(),
-            },
-            True,
-        )
-    )
-
-    # Negation / contradiction cue
-    pairs.append(
-        (
-            {
-                "run_id": "neg_bad",
-                "question": "Is the drug safe for children?",
-                "answer": "The drug is safe for children.",
-                "preload": [
-                    {
-                        "chunk_id": "c1",
-                        "text": "The drug is not safe for children.",
-                        "source": "retrieval",
-                    }
-                ],
-                "trace": _good_trace(),
-                "declared_sections": ["must_ground"],
-            },
-            True,
-        )
-    )
-
-    # Structured JSON
-    pairs.append(
-        (
-            {
-                "run_id": "json_good",
-                "question": "revenue?",
-                "answer": '{"revenue": 1000, "currency": "USD"}',
-                "preload": [
-                    {
-                        "chunk_id": "1",
-                        "text": '{"revenue": 1000, "currency": "USD"}',
-                    }
-                ],
-                "trace": _good_trace(),
-            },
-            False,
-        )
-    )
     pairs.append(
         (
             {
@@ -156,17 +76,14 @@ def synthetic_pairs() -> list[tuple[dict[str, Any], bool]]:
                 "question": "revenue?",
                 "answer": '{"revenue": 9999, "currency": "USD"}',
                 "preload": [
-                    {
-                        "chunk_id": "1",
-                        "text": '{"revenue": 1000, "currency": "USD"}',
-                    }
+                    {"chunk_id": "1", "text": '{"revenue": 1000, "currency": "USD"}'}
                 ],
                 "trace": _good_trace(),
             },
             True,
         )
     )
-
+    pairs.extend(hard_effect_pairs())
     return pairs
 
 
@@ -175,75 +92,18 @@ def _pred_halluc(verdict) -> bool:
 
 
 def _span_baseline_pred(bundle, clf: SpanClassifier) -> bool:
-    """In-process LettuceDetect-class / lexical proxy — not an external product."""
     result = clf.classify(bundle)
     return result.unsupported_span_ratio >= 0.15 or bool(result.spans)
 
 
-def _try_ragtruth(limit: int = 50) -> list[tuple[dict[str, Any], bool]] | None:
-    if os.environ.get("PRISMSHINE_BENCH_FULL") != "1":
-        return None
-    import importlib
-
-    try:
-        load_dataset = importlib.import_module("datasets").load_dataset
-    except Exception:  # noqa: BLE001
-        return None
-    try:
-        ds = load_dataset("wandb/RAGTruth-test", split="test")
-    except Exception:  # noqa: BLE001
-        try:
-            ds = load_dataset("RAGTruth/RAGTruth", split="test")
-        except Exception:  # noqa: BLE001
-            return None
-    out: list[tuple[dict[str, Any], bool]] = []
-    for i, row in enumerate(ds):
-        if i >= limit:
-            break
-        q = str(row.get("question") or row.get("query") or "")
-        a = str(row.get("answer") or row.get("response") or "")
-        ctx = row.get("context") or row.get("passage") or row.get("source") or ""
-        if isinstance(ctx, list):
-            texts = [str(c) for c in ctx]
-        else:
-            texts = [str(ctx)]
-        label = row.get("hallucination") or row.get("label") or row.get("is_hallucination")
-        if label is None and "labels" in row:
-            label = bool(row["labels"])
-        is_h = bool(label) if not isinstance(label, str) else label.lower() in {
-            "1",
-            "true",
-            "hallucination",
-            "yes",
-        }
-        out.append(
-            (
-                {
-                    "run_id": f"ragtruth_{i}",
-                    "question": q or "q",
-                    "answer": a or "",
-                    "preload": [
-                        {"chunk_id": f"c{j}", "text": t, "source": "retrieval"}
-                        for j, t in enumerate(texts)
-                        if t.strip()
-                    ]
-                    or [{"chunk_id": "empty", "text": "(no context)", "source": "system"}],
-                    "trace": _good_trace(),
-                },
-                is_h,
-            )
-        )
-    return out or None
-
-
-def run_grounding_suite(*, gate: ShineGate | None = None) -> SuiteResult:
-    gate = gate or _gate()
+def _eval_pairs(
+    gate: ShineGate, pairs: list[tuple[dict[str, Any], bool]]
+) -> tuple[Confusion, list[float], list[bool], list[dict[str, Any]]]:
     conf = Confusion()
     scores: list[float] = []
     labels: list[bool] = []
     cases: list[dict[str, Any]] = []
-
-    for data, is_h in synthetic_pairs():
+    for data, is_h in pairs:
         b, _ = bundle_from_dict(data)
         v = gate.verify(b)
         pred = _pred_halluc(v)
@@ -252,66 +112,120 @@ def run_grounding_suite(*, gate: ShineGate | None = None) -> SuiteResult:
         labels.append(is_h)
         cases.append(
             {
-                "run_id": data["run_id"],
+                "run_id": data.get("run_id"),
                 "is_hallucination": is_h,
                 "predicted": pred,
                 "decision": v.decision,
                 "fused_score": v.fused_score,
+                "gate": v.resolution_gate,
             }
         )
+    return conf, scores, labels, cases
 
-    # Span-backend baseline on same pairs (in-process)
+
+def _domain_calibrate_lift() -> dict[str, Any]:
+    """Decision-F1 before vs after synthetic calibrate on a small grounded set."""
+    from prismshine.calibrate import domain_calibrate_lift
+
+    grounded = []
+    for i in range(8):
+        b, _ = bundle_from_dict(
+            {
+                "run_id": f"cal_g_{i}",
+                "question": "What was revenue?",
+                "answer": f"Revenue was ${1000 + i} in Q1 for Acme Corp.",
+                "preload": [
+                    {
+                        "chunk_id": "c1",
+                        "text": f"Revenue was ${1000 + i} in Q1 for Acme Corp.",
+                    }
+                ],
+                "trace": _good_trace(),
+            }
+        )
+        grounded.append(b)
+
+    out = domain_calibrate_lift(
+        grounded, profile="clinical", seed=7, embedder=hash_embedder
+    )
+    out["notes"] = [
+        "F1 lift measured on synthetic negatives (band fit); labeled packs preferred for claims.",
+        "Gate: +0.10 decision-F1 or calibrated F1 >= 0.90.",
+    ]
+    return out
+
+
+def run_grounding_suite(*, gate: ShineGate | None = None) -> SuiteResult:
+    gate = gate or _gate()
+    pairs = synthetic_pairs()
+    conf, scores, labels, cases = _eval_pairs(gate, pairs)
+
     clf = SpanClassifier(allow_lexical_fallback=True)
     span_conf = Confusion()
-    for data, is_h in synthetic_pairs():
+    for data, is_h in pairs:
         b, _ = bundle_from_dict(data)
         span_conf.update(y_true=is_h, y_pred=_span_baseline_pred(b, clf))
 
     roc = auroc(scores, labels)
     f1_gate = conf.f1 >= 0.85
-
-    rag = _try_ragtruth()
-    rag_metrics: dict[str, Any] = {"status": "skipped"}
-    if rag:
-        rconf = Confusion()
-        for data, is_h in rag:
-            b, _ = bundle_from_dict(data)
-            rconf.update(y_true=is_h, y_pred=_pred_halluc(gate.verify(b)))
-        rag_metrics = {"status": "ran", **rconf.as_dict(), "n": len(rag)}
-
     delta = conf.f1 - span_conf.f1
-    # Within 5 F1 pts of in-process span baseline (or better)
     vs_sota = abs(delta) <= 0.05 or conf.f1 >= span_conf.f1
+
+    rag = try_load_ragtruth()
+    rag_metrics: dict[str, Any] = {"status": "skipped", "hard_effect_offline": True}
+    if rag:
+        rconf, rscores, rlabels, _ = _eval_pairs(gate, rag)
+        rag_metrics = {
+            "status": "ran",
+            **rconf.as_dict(),
+            "n": len(rag),
+            "auroc": auroc(rscores, rlabels),
+        }
+
+    cal = _domain_calibrate_lift()
+
+    # Hard negation subset must not PASS as grounded
+    neg_cases = [c for c in cases if c.get("run_id") == "hard_neg_bad"]
+    neg_ok = all(c["predicted"] for c in neg_cases) if neg_cases else True
+
+    passed = f1_gate and vs_sota and neg_ok
 
     return SuiteResult(
         name="grounding",
-        passed=f1_gate and vs_sota,
+        passed=passed,
         gates={
             "synthetic_f1_min": 0.85,
             "synthetic_f1": round(conf.f1, 4),
             "within_5pts_of_span_baseline": vs_sota,
             "f1_delta_vs_span": round(delta, 4),
+            "hard_negation_caught": neg_ok,
+            "calibrate_lift_met": cal.get("lift_met"),
         },
         metrics={
             "synthetic": conf.as_dict(),
             "auroc": None if roc is None else round(roc, 4),
+            "n_pairs": len(pairs),
             "span_baseline": {
                 **span_conf.as_dict(),
                 "backend": clf.backend,
-                "note": "In-process SpanClassifier (lexical/onnx), not external LettuceDetect API",
+                "artifact_id": clf.artifact_id,
+                "note": "In-process SpanClassifier; pin via PRISMSHINE_SPAN_ONNX for onnx",
             },
             "ragtruth": rag_metrics,
+            "domain_calibrate": cal,
         },
         cases=cases,
         notes=[
-            "Synthetic hard cases: numbers, entities/dates, negation, structured JSON.",
-            "Set PRISMSHINE_BENCH_FULL=1 + datasets to load RAGTruth subset.",
-            "POSITIONING: example-level within 5 F1 of encoder SotA (span baseline proxy).",
+            "Includes hard_effect_pairs (negation/entity/finance/legal) offline.",
+            "Set PRISMSHINE_BENCH_FULL=1 + datasets for real RAGTruth subset.",
+            "Pin ONNX: PRISMSHINE_SPAN_ONNX (+ optional PRISMSHINE_SPAN_TOKENIZER).",
+            "Domain calibrate lift is a separate receipt row under domain_calibrate.",
         ],
         competitor_baseline={
             "status": "in-process span baseline only",
             "span_f1": round(span_conf.f1, 4),
             "shine_f1": round(conf.f1, 4),
+            "span_backend": clf.backend,
             "detail": "External RAGAS/DeepEval/LettuceDetect Hub runs are not bundled.",
         },
     )

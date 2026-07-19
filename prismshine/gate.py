@@ -574,14 +574,30 @@ class ShineGate:
             decision = "flag"
             gate = "T1_UNMATCHED_HARD_FACT"
 
-        # Contradiction cues without resolution cannot PASS on high-stakes profiles
+        # Contradiction cues without resolution cannot PASS.
+        # Judge may clear; ONNX Tier-3 may clear only when it marked cue spans unsupported.
         if has_cues and decision == "pass":
+            cue_resolved = False
+            if judge_present:
+                cue_resolved = True  # fusion already incorporated judge_risk
+            elif span_backend == "onnx":
+                cue_texts = {c.sentence.strip().lower() for c in cov.contradiction_cues}
+                cue_resolved = any(
+                    (s.text or "").strip().lower() in cue_texts
+                    or "contradiction" in (s.reason or "")
+                    for s in spans
+                    if s.tier >= 3
+                )
             if force_judge and not judge_present:
                 decision = "flag"
                 gate = "T2_CONTRADICTION_UNRESOLVED"
-            elif policy.contradiction_forces_tier3 and span_backend != "onnx":
+            elif not cue_resolved:
                 decision = "flag"
-                gate = "T2_CONTRADICTION_CUE"
+                gate = (
+                    "T2_CONTRADICTION_CUE"
+                    if span_backend != "onnx"
+                    else "T2_CONTRADICTION_UNRESOLVED"
+                )
 
         advice = [h.advice for h in forensics.hits if h.advice]
         if hard_unmatched:
