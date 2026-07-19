@@ -190,3 +190,77 @@ def encoder_mismatch(
                 )
             )
     return hits
+
+
+def trace_incomplete(
+    bundle: EvidenceBundle, params: dict[str, Any], sig: SignatureDef
+) -> list[SignatureHit]:
+    """consumes= declared but expected trace kinds missing — silent dormancy is banned."""
+    consumes = list(bundle.node_state.get("consumes") or [])
+    if not consumes and not bundle.node_state.get("expect_trace_kinds"):
+        return []
+    expected = set(bundle.node_state.get("expect_trace_kinds") or [])
+    # Heuristic: docs/chunks keys imply retrieval; tools imply tool
+    for key in consumes:
+        kl = str(key).lower()
+        if kl in {"docs", "chunks", "context", "retrieval"}:
+            expected.add("retrieval")
+        if kl in {"tools", "tool_result", "tool_results"}:
+            expected.add("tool")
+        if kl in {"memory", "recalls"}:
+            expected.add("memory")
+    present = {t.kind for t in bundle.trace}
+    missing = sorted(k for k in expected if k not in present)
+    if not missing:
+        return []
+    return [
+        SignatureHit(
+            id=sig.id,
+            title=sig.title,
+            severity=sig.severity,
+            scope=sig.scope,
+            advice=format_advice(
+                sig.advice,
+                missing=",".join(missing),
+                consumes=",".join(str(c) for c in consumes),
+            ),
+            evidence={"missing_kinds": missing, "consumes": consumes},
+            signal_value=sig.signal_value,
+        )
+    ]
+
+
+def parallel_ambiguity(
+    bundle: EvidenceBundle, params: dict[str, Any], sig: SignatureDef
+) -> list[SignatureHit]:
+    """Multiple concurrent retrieval/llm hops without a declared answer provenance hop."""
+    if bundle.node_state.get("answer_source_hop"):
+        return []
+    retrieval_hops = [t.hop for t in bundle.trace if t.kind == "retrieval"]
+    llm_hops = [t.hop for t in bundle.trace if t.kind == "llm"]
+    parallel = bundle.node_state.get("parallel_hops") or bundle.node_state.get(
+        "bsp_superstep_parallel"
+    )
+    multi_retrieval = len(set(retrieval_hops)) >= 2
+    multi_llm = len(set(llm_hops)) >= 2
+    if not (parallel or multi_retrieval and multi_llm):
+        return []
+    if multi_retrieval and not bundle.node_state.get("answer_source_hop"):
+        return [
+            SignatureHit(
+                id=sig.id,
+                title=sig.title,
+                severity=sig.severity,
+                scope=sig.scope,
+                advice=format_advice(
+                    sig.advice,
+                    hops=",".join(sorted(set(retrieval_hops))),
+                ),
+                evidence={
+                    "retrieval_hops": retrieval_hops,
+                    "llm_hops": llm_hops,
+                },
+                signal_value=sig.signal_value,
+            )
+        ]
+    return []

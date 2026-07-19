@@ -11,7 +11,8 @@ from prismshine.models import EvidenceBundle, SignatureHit, Signal
 
 
 FAMILY_EVIDENCE: dict[str, Callable[[EvidenceBundle], bool]] = {
-    "retrieval": lambda b: any(t.kind == "retrieval" for t in b.trace),
+    "retrieval": lambda b: any(t.kind == "retrieval" for t in b.trace)
+    or any(t.kind == "cache" for t in b.trace),  # cache-miss→skip needs retrieval family
     "tools": lambda b: any(t.kind == "tool" for t in b.trace),
     "context": lambda b: True,
     "cache": lambda b: any(t.kind == "cache" for t in b.trace),
@@ -29,6 +30,8 @@ FAMILY_EVIDENCE: dict[str, Callable[[EvidenceBundle], bool]] = {
         or b.node_state.get("hop_budget_exhausted") is True
         or b.node_state.get("anti_thrash") is True
     ),
+    "llm": lambda b: any(t.kind == "llm" for t in b.trace)
+    or (b.answer is not None and not str(b.answer).strip()),
 }
 
 

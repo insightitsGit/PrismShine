@@ -28,7 +28,15 @@ def verdict_cache_key(
     handbook_version: str,
     calibration_version: str,
     model_artifact_ids: list[str],
+    trace_hash: str = "",
+    state_hash: str = "",
 ) -> str:
+    """Content-addressed verdict key.
+
+    ``trace_hash`` / ``state_hash`` are required for cause-side correctness:
+    the same preload+answer with different ledger steps (empty retrieval,
+    cache miss, LLM error) must not reuse a prior verdict.
+    """
     return content_hash(
         {
             "preload_ids": sorted(preload_ids),
@@ -38,6 +46,8 @@ def verdict_cache_key(
             "handbook_version": handbook_version,
             "calibration_version": calibration_version,
             "model_artifact_ids": sorted(model_artifact_ids),
+            "trace_hash": trace_hash,
+            "state_hash": state_hash,
         }
     )
 

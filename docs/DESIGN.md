@@ -325,7 +325,7 @@ Every verdict also carries these indexes — they improve decision quality and g
 
 **Caching — never verify the same thing twice:**
 
-- Verdict cache key: `SHA-256(canonical(preload_ids + preload_hash) ‖ answer_norm ‖ profile_id ‖ handbook_version ‖ calibration_version ‖ model_artifact_ids)` (PrismCortex content-address style; the version components make the cache self-invalidating per §6.1). Paraphrase-level reuse can additionally route through PrismCache with the answer vector.
+- Verdict cache key: `SHA-256(canonical(preload_ids + preload_hash) ‖ answer_norm ‖ profile_id ‖ handbook_version ‖ calibration_version ‖ model_artifact_ids ‖ trace_hash ‖ state_hash)` (PrismCortex content-address style; the version + ledger fingerprints make the cache self-invalidating per §6.1 — same answer/preload with a different Route Ledger must not reuse a prior verdict). Paraphrase-level reuse can additionally route through PrismCache with the answer vector.
 - Answer-sentence embeddings are memoized by sentence hash within a process.
 
 **Explicit rule: PrismShine performs zero embedding-API calls under all configurations.** The only network call in the entire library is the opt-in Tier-4 judge.

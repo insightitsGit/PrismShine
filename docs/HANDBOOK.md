@@ -92,6 +92,23 @@ Rules:
 | `HOP_BUDGET_EXHAUSTED` | warning | run hit recursion/hop limit before completing planned retrieval hops |
 | `ANTI_THRASH_TRIGGERED` | info | ReAct stop-on-repeated-action fired — the agent may have answered without the data it was looping for |
 
+### LLM hop family
+
+| id | severity | fires when |
+|---|---|---|
+| `LLM_ERROR` | fatal | llm-kind step `status in {error, timeout}` (provider/auth/rate-limit mapped into the ledger) |
+| `LLM_EMPTY_COMPLETION` | error | llm step empty / zero tokens / blank answer after an llm hop |
+| `LLM_REFUSAL` | warning | finish_reason / refusal / content_filter on an llm hop |
+
+### Trace completeness / cache-skip / parallel attribution
+
+| id | severity | fires when |
+|---|---|---|
+| `TRACE_INCOMPLETE` | error | `consumes` / `expect_trace_kinds` declared but required ledger kinds missing (bans silent dormancy) |
+| `RETRIEVAL_SKIPPED_AFTER_CACHE_MISS` | error | cache `MISS` with no subsequent retrieval before an llm hop |
+| `HIT_REVALIDATE_IGNORED` | error | entry marked `must_revalidate` but decision was still `HIT_REUSE` |
+| `PARALLEL_PRELOAD_AMBIGUITY` | warning | multiple retrieval hops without `node_state.answer_source_hop` |
+
 ## 3. Domain packs (licensed tier, schema identical)
 
 - `clinical.yaml` — stricter floors (coverage τ aligned with ChorusGraph's 0.97 clinical verify), dosage/unit copy-check mandatory, `STAGED_FACT_SERVED` promoted to error.

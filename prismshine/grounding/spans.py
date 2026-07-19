@@ -11,12 +11,17 @@ from prismshine.models import EvidenceBundle, Signal, Span
 
 logger = logging.getLogger(__name__)
 
+import os
+
 # Candidate hubs (first successful ONNX+tokenizer wins). LettuceDetect-class.
+# Pin via PRISMSHINE_SPAN_MODEL / PRISMSHINE_SPAN_ONNX for CI reproducibility (P3).
 DEFAULT_MODEL_CANDIDATES = (
     "Kriso/lettuce-detect-base",
     "lettucedetect/lettucedetect-base-modernbert",
 )
 DEFAULT_ARTIFACT = "lettucedetect-onnx-v1"
+PINNED_ARTIFACT_ENV = "PRISMSHINE_SPAN_ONNX"
+PINNED_MODEL_ENV = "PRISMSHINE_SPAN_MODEL"
 
 
 @dataclass
@@ -39,10 +44,14 @@ class SpanClassifier:
         cache_dir: str | Path | None = None,
         allow_lexical_fallback: bool = True,
     ) -> None:
-        self.model_id = model_id or DEFAULT_MODEL_CANDIDATES[0]
+        env_model = os.environ.get(PINNED_MODEL_ENV)
+        self.model_id = model_id or env_model or DEFAULT_MODEL_CANDIDATES[0]
         self.model_candidates = (
-            (model_id,) if model_id else DEFAULT_MODEL_CANDIDATES
+            (model_id,)
+            if model_id
+            else ((env_model,) if env_model else DEFAULT_MODEL_CANDIDATES)
         )
+        self._pinned_onnx = os.environ.get(PINNED_ARTIFACT_ENV)
         self.tau_tok = tau_tok
         self.cache_dir = Path(cache_dir or Path.home() / ".prismshine" / "models")
         self.allow_lexical_fallback = allow_lexical_fallback
@@ -78,6 +87,24 @@ class SpanClassifier:
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         try:
+            # Pinned local ONNX path (CI / air-gapped)
+            if self._pinned_onnx and Path(self._pinned_onnx).is_file():
+                try:
+                    self._session = ort.InferenceSession(
+                        self._pinned_onnx, providers=["CPUExecutionProvider"]
+                    )
+                    tok_path = None
+                    tok_candidate = Path(self._pinned_onnx).with_name("tokenizer.json")
+                    if tok_candidate.is_file():
+                        self._tokenizer = Tokenizer.from_file(str(tok_candidate))
+                        tok_path = str(tok_candidate)
+                    if tok_path:
+                        self.artifact_id = f"pinned@{Path(self._pinned_onnx).name}"
+                        self._backend = "onnx"
+                        return True
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("pinned ONNX load failed: %s", exc)
+
             for repo in self.model_candidates:
                 onnx_path = None
                 for candidate in (

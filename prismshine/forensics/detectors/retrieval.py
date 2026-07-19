@@ -177,3 +177,41 @@ def partial(
                 )
             )
     return hits
+
+
+def skipped_after_cache_miss(
+    bundle: EvidenceBundle, params: dict[str, Any], sig: SignatureDef
+) -> list[SignatureHit]:
+    """Cache MISS but no subsequent retrieval hop — graph answered without fresh docs."""
+    hits: list[SignatureHit] = []
+    for i, step in enumerate(bundle.trace):
+        if step.kind != "cache":
+            continue
+        decision = step.detail.get("decision") or step.detail.get("kind")
+        if decision != "MISS":
+            continue
+        later_retrieval = any(
+            t.kind == "retrieval" and j > i for j, t in enumerate(bundle.trace)
+        )
+        skipped = step.detail.get("retrieval_skipped") is True or (
+            not later_retrieval
+            and bundle.node_state.get("planned_retrieval") is True
+        )
+        # Also fire when MISS is followed only by llm with no retrieval
+        if not later_retrieval and any(
+            t.kind == "llm" and j > i for j, t in enumerate(bundle.trace)
+        ):
+            skipped = True
+        if skipped:
+            hits.append(
+                SignatureHit(
+                    id=sig.id,
+                    title=sig.title,
+                    severity=sig.severity,
+                    scope=sig.scope,
+                    advice=format_advice(sig.advice, hop=step.hop),
+                    evidence={"trace_index": i, "hop": step.hop, "decision": decision},
+                    signal_value=sig.signal_value,
+                )
+            )
+    return hits

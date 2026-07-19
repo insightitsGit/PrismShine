@@ -679,5 +679,12 @@ def test_handbook_lists_all_expected_signatures():
         "GUARD_GRAY_INPUT",
         "HOP_BUDGET_EXHAUSTED",
         "ANTI_THRASH_TRIGGERED",
+        "LLM_ERROR",
+        "LLM_EMPTY_COMPLETION",
+        "LLM_REFUSAL",
+        "TRACE_INCOMPLETE",
+        "RETRIEVAL_SKIPPED_AFTER_CACHE_MISS",
+        "HIT_REVALIDATE_IGNORED",
+        "PARALLEL_PRELOAD_AMBIGUITY",
     }
     assert expected <= {s.id for s in HB.signatures}

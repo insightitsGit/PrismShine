@@ -225,6 +225,31 @@ class ShineGate:
         preload_hash = content_hash(
             [{"id": c.chunk_id, "text": c.text} for c in bundle.preload]
         )
+        # Cause-side: ledger/trace + forensic node_state must fingerprint the key
+        # or EMPTY_RETRIEVAL / LLM_ERROR / cache signatures collide across runs.
+        trace_hash = content_hash(
+            [t.model_dump(mode="json") for t in bundle.trace]
+        )
+        state_keys = (
+            "consumes",
+            "expect_trace_kinds",
+            "parallel_hops",
+            "answer_source_hop",
+            "missing_keys",
+            "cache_must_revalidate",
+            "memory_conflicts",
+            "staged_facts",
+            "preload_conflicts",
+            "guard_verdict",
+            "hop_budget_exhausted",
+            "anti_thrash",
+            "resonance_phase",
+            "phase",
+            "declared_sections",
+        )
+        state_hash = content_hash(
+            {k: bundle.node_state[k] for k in state_keys if k in bundle.node_state}
+        )
         artifacts = [
             a
             for a in [
@@ -233,6 +258,18 @@ class ShineGate:
             ]
             if a
         ]
+        # Fold declared_sections into state fingerprint (affects must_ground)
+        if bundle.declared_sections:
+            state_hash = content_hash(
+                {
+                    "sections": list(bundle.declared_sections),
+                    "state": {
+                        k: bundle.node_state[k]
+                        for k in state_keys
+                        if k in bundle.node_state
+                    },
+                }
+            )
         return verdict_cache_key(
             preload_ids=[c.chunk_id for c in bundle.preload],
             preload_hash=preload_hash,
@@ -241,6 +278,8 @@ class ShineGate:
             handbook_version=self.handbook.handbook_version,
             calibration_version=self.calibration_version,
             model_artifact_ids=artifacts,
+            trace_hash=trace_hash,
+            state_hash=state_hash,
         )
 
     def verify(self, bundle: EvidenceBundle) -> ShineVerdict:
@@ -555,6 +594,12 @@ class ShineGate:
                 "Contradiction cues vs preload; do not treat high cosine as support. "
                 + "; ".join(c.reason for c in cov.contradiction_cues[:3])
             )
+        # Ask-user clarify template for memory/preload conflicts (P3)
+        from prismshine.actions import clarify_conflict_question
+
+        for hit in forensics.hits:
+            if hit.id in {"CONFLICTING_PRELOAD_FACTS", "MEMORY_CONFLICT_SERVED"}:
+                advice.append(clarify_conflict_question(hit))
         if decision == "regenerate":
             from prismshine.regen import build_repair_feedback
 

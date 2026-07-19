@@ -173,3 +173,34 @@ def context_misuse(
             )
         )
     return hits
+
+
+def revalidate_ignored(
+    bundle: EvidenceBundle, params: dict[str, Any], sig: SignatureDef
+) -> list[SignatureHit]:
+    """Entry was marked for revalidation but graph still took HIT_REUSE."""
+    hits: list[SignatureHit] = []
+    for i, step in _cache_steps(bundle):
+        decision = step.detail.get("decision") or step.detail.get("kind")
+        marked = (
+            step.detail.get("must_revalidate") is True
+            or step.detail.get("revalidate_marked") is True
+            or bundle.node_state.get("cache_must_revalidate") is True
+        )
+        if marked and decision == "HIT_REUSE":
+            hits.append(
+                SignatureHit(
+                    id=sig.id,
+                    title=sig.title,
+                    severity=sig.severity,
+                    scope=sig.scope,
+                    advice=format_advice(sig.advice, hop=step.hop),
+                    evidence={
+                        "trace_index": i,
+                        "hop": step.hop,
+                        "decision": decision,
+                    },
+                    signal_value=sig.signal_value,
+                )
+            )
+    return hits

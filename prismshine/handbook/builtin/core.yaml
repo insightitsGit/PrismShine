@@ -233,3 +233,68 @@ signatures:
     params: {}
     signal_value: 0.2
     advice: "Anti-thrash triggered on hop '{hop}' (repeated action '{action}'). Agent may have answered without the data it was looping for."
+
+  # --- LLM hop family (provider failures mapped into kind=llm TraceSteps) ---
+  - id: LLM_ERROR
+    title: "LLM provider hop errored or timed out"
+    severity: fatal
+    scope: answer
+    detector: llm.error
+    params: {}
+    signal_value: 1.0
+    advice: "LLM hop '{hop}' status={status}: {detail}. Do not treat a partial/missing completion as a grounded answer."
+
+  - id: LLM_EMPTY_COMPLETION
+    title: "LLM hop returned an empty completion"
+    severity: error
+    scope: answer
+    detector: llm.empty_completion
+    params: {}
+    signal_value: 0.85
+    advice: "LLM hop '{hop}' produced an empty completion. Retry or return an honest fallback — never invent."
+
+  - id: LLM_REFUSAL
+    title: "LLM hop refused / content-filtered"
+    severity: warning
+    scope: answer
+    detector: llm.refusal
+    params: {}
+    signal_value: 0.4
+    advice: "LLM hop '{hop}' finish_reason='{reason}'. Refusal is not a grounded answer; surface the refusal or rephrase within policy."
+
+  # --- Trace completeness / cache-skip / parallel attribution ---
+  - id: TRACE_INCOMPLETE
+    title: "Declared consumes/expected kinds missing from ledger"
+    severity: error
+    scope: run
+    detector: context.trace_incomplete
+    params: {}
+    signal_value: 0.7
+    advice: "Trace incomplete for consumes=[{consumes}]: missing kind(s) {missing}. Detector families will be dormant — fix ledger emission or clear consumes."
+
+  - id: RETRIEVAL_SKIPPED_AFTER_CACHE_MISS
+    title: "Cache MISS with no subsequent retrieval before generation"
+    severity: error
+    scope: preload
+    detector: retrieval.skipped_after_cache_miss
+    params: {}
+    signal_value: 0.85
+    advice: "Cache hop '{hop}' was MISS but no retrieval hop ran before the LLM. The graph answered without fresh evidence."
+
+  - id: HIT_REVALIDATE_IGNORED
+    title: "Cache entry marked revalidate but HIT_REUSE was taken"
+    severity: error
+    scope: preload
+    detector: cache.revalidate_ignored
+    params: {}
+    signal_value: 0.8
+    advice: "Cache hop '{hop}' was marked must_revalidate but Decision was HIT_REUSE. Honor mark_revalidate or force HIT_REVALIDATE."
+
+  - id: PARALLEL_PRELOAD_AMBIGUITY
+    title: "Multiple retrieval hops without declared answer provenance"
+    severity: warning
+    scope: run
+    detector: context.parallel_ambiguity
+    params: {}
+    signal_value: 0.45
+    advice: "Parallel/multi retrieval hops [{hops}] without node_state.answer_source_hop. Set answer provenance so Shine attributes the correct preload."

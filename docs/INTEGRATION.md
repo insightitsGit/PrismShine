@@ -8,32 +8,38 @@ How PrismShine attaches to each sibling library. Verified against the KB (`kb/li
 
 ### Attach points
 
-**a) Post-generation node (guaranteed path, v0):**
+**a) Fail-fast wiring (`require_shine`) + post-generation node (guaranteed path):**
 
 ```python
 from prismshine import ShineGate
-from prismshine.integrations.chorusgraph import shine_node
+from prismshine.integrations.chorusgraph import require_shine, shine_node
 
 gate = ShineGate.build(profile="finance")
 g.add_node("shine", shine_node(gate, answer_key="reply"))
 g.add_edge("generate", "shine")
 g.add_edge("shine", END)
+compiled = g.compile()
+require_shine(compiled, gate, prefer="both", already_has_shine_node=True)
 ```
 
-The node builds an `EvidenceBundle` from the run's Route Ledger steps + current node state, verifies, writes the verdict into state (`state["shine_verdict"]`) and as a ledger step, and routes: `pass/flag` → continue, `block` → interrupt/replace answer, `regenerate` → loop back to generator with unsupported spans appended as repair feedback (bounded retries, respecting ChorusGraph anti-thrash conventions).
+`require_shine` raises `ShineNotWiredError` if neither interceptor nor `shine_node` is attached. The node builds an `EvidenceBundle` from Route Ledger steps (auto-pulled from `compiled.last_ledger` / `ledger_steps`) + node state, verifies, writes `state["shine_verdict"]` / `shine_actions` / `shine_route`, and routes: `pass/flag` → continue, `block` → replace answer, `regenerate` → repair feedback (bounded).
 
-**b) Interceptor (pre-generation mode — SHIPPED in ChorusGraph 1.3.0, ADR-008):**
+**b) Interceptor (pre-generation mode — ChorusGraph 1.3.0, ADR-008):**
 
 ```python
+# Prefer: require_shine(compiled, gate, prefer="both")
+# Or manually:
 compiled.register_interceptor(
-    before_llm=shine_before_hook(gate),   # Tier-0 preload verdict → InterceptDecision.proceed/halt/reroute
-    after_llm=shine_after_hook(gate),     # full verify, Tier-0 reused via evidence hash
+    before_llm=shine_before_hook(gate),   # before_llm(ctx, state) → InterceptDecision
+    after_llm=shine_after_hook(gate),     # after_llm(ctx, state, output)
 )
 ```
 
-Before the call: a fatal signature (e.g. `EMPTY_RETRIEVAL`) halts (`NodeInterrupt` with fallback) or reroutes to a repair hop before tokens are spent. After the call: full verify; `halt(fallback=...)` replaces the answer. Same pipeline, both moments.
+Before the call: a fatal signature (e.g. `EMPTY_RETRIEVAL`) halts (`NodeInterrupt` with fallback) or reroutes to a repair hop before tokens are spent. After the call: full verify; `halt(fallback=...)` replaces the answer.
 
-**Contract caveat (matters for graph authors):** the hooks fire at the provider boundary inside `NodeContext.call_llm` (or an `Agent` built with the wrapped model). Nodes that call a raw provider SDK directly bypass the interceptor — for those graphs, use the `shine_node` post-generation path (a), which always works. PrismShine's ChorusGraph adapter should document "use `ctx.call_llm` to get pre-generation halting."
+**Contract caveat:** hooks fire only inside `NodeContext.call_llm`. Raw provider SDK calls bypass interceptors — keep `shine_node` as the guaranteed path. Put retrieval/cache/llm failures into `ledger_steps` (JSON-safe dicts or `make_custom_step`) so Tier-0 can see them.
+
+**Live failure matrix:** `tests/test_chorusgraph_live_matrix.py` (real `Graph` + `call_llm` + injected empty retrieval / cache-miss-skip / LLM error / TRACE_INCOMPLETE).
 
 ### Evidence mapping (ledger → bundle)
 
@@ -47,6 +53,11 @@ Before the call: a fatal signature (e.g. `EMPTY_RETRIEVAL`) halts (`NodeInterrup
 | tenant / section config | `tenant_id`, `declared_sections` |
 
 Verdicts write back as ledger steps so `chorusgraph-audit` and future trace consoles see Shine decisions inline with hops.
+
+### RuntimeAdapter
+
+`ChorusGraphAdapter` / `LangGraphAdapter` implement `prismshine.runtime.RuntimeAdapter`:
+`extract_bundle` · `enforce` · `pre_llm_hook` · `post_llm_hook`. Conformance: `tests/test_runtime_conformance.py`.
 
 ## 2. prismlang — `prismshine[coverage]`
 
@@ -105,19 +116,61 @@ A semantic cache hit can serve an answer generated from a fact that has since be
 
 Retrieval steps that flow through prismrag adapters carry `rule_chain` / category info; the `CATEGORY_MISMATCH` detector compares chunk categories against the query's inferred category. No direct dependency — data arrives via the ledger/adapters.
 
-## 8. Standalone mode (no Insight runtime)
+## 8. BYO runtime (LangGraph / custom) — same features as ChorusGraph
+
+ChorusGraph is a **convenience plugin**, not a capability gate. Every cause-side /
+wiring feature maps to a generic API in `prismshine.wiring`:
+
+| Feature | ChorusGraph helper | Any runtime (LangGraph / custom) |
+|---|---|---|
+| Fail-fast wiring | `require_shine(compiled, gate)` | `require_shine_wiring(app, gate)` / `integrations.langgraph.require_shine` |
+| Pre-gen halt | `register_interceptor(before_llm=...)` via `ctx.call_llm` | `wrap_llm(model, gate, state_factory=...)` or `pre_llm_check(gate, state)` |
+| Post-gen verify | `shine_node(gate)` | `shine_verify_node(gate)` / `shine_langgraph_node(gate)` |
+| Decision contract | `InterceptDecision` | `ShineDecision` (`proceed` / `halt` / `reroute`) |
+| RuntimeAdapter | `ChorusGraphAdapter` | `make_dict_adapter(gate)` / `LangGraphAdapter` |
+| Empty retrieval | ledger `kind=retrieval` | `record_retrieval(hop, n_chunks=0)` → `state["trace"]` |
+| Cache miss skip | ledger cache + llm | `record_cache(hop, "MISS")` + llm step |
+| LLM provider error | `llm_error=` kwarg / llm step | `record_llm_error(hop, error=...)` / `append_trace` |
+| TRACE_INCOMPLETE | `consumes=` + `expect_trace_kinds` | same keys on state dict |
+| Parallel ambiguity | `parallel_hops` / `answer_source_hop` | same keys on state |
+| Clarify actions | `shine_actions` on enforce | same (`enforce_verdict` / verify node) |
+| Fact correction | `on_fact_corrected(...)` | same duck-typed hook in `wiring.on_fact_corrected` |
+
+```python
+from prismshine import ShineGate, wrap_llm, shine_verify_node, require_shine_wiring
+from prismshine.wiring import record_retrieval, append_trace
+
+gate = ShineGate.build(profile="default")
+app = MyGraph()  # LangGraph compiled graph, custom agent, etc.
+require_shine_wiring(app, gate, already_has_shine_node=True)
+
+def retrieve(state):
+    docs = my_retriever(state["question"])
+    state = append_trace(state, record_retrieval("retrieve", n_chunks=len(docs)))
+    return {**state, "docs": docs}
+
+# Provider boundary (ChorusGraph-equivalent of ctx.call_llm)
+llm = wrap_llm(my_model, gate, state_factory=lambda: current_state)
+
+# Guaranteed post-gen path
+graph.add_node("shine", shine_verify_node(gate, answer_key="answer"))
+```
+
+Proof suite (no ChorusGraph import): `tests/test_byo_runtime.py`.
+
+### Standalone dict verify
 
 ```python
 from prismshine import ShineGate
-from prismshine.evidence.adapters.generic import bundle_from_dict
+from prismshine.evidence.adapters.generic import from_dict
 
-bundle = bundle_from_dict({
+bundle, _ = from_dict({
     "question": q,
     "answer": a,
-    "preload": [{"chunk_id": "c1", "text": t1, "vector": v1}, ...],  # vectors optional
-    "trace": [...],                                                   # optional
+    "preload": [{"chunk_id": "c1", "text": t1, "vector": v1}, ...],
+    "trace": [...],
 })
 verdict = ShineGate.build(profile="default").verify(bundle)
 ```
 
-Without a trace, Tier 0 runs only the trace-independent detectors (context budget, duplication); Tiers 1–4 work fully. This keeps PrismShine adoptable by non-Insight stacks (LangGraph adapter provided) while the full cause-side value lights up inside ChorusGraph.
+Without a trace, Tier 0 runs only trace-independent detectors; Tiers 1–4 still work.

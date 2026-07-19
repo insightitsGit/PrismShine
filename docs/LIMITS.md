@@ -46,6 +46,20 @@ Without ledger/cache/memory evidence, you have **not** bought the category-defin
 3. Populate docs **and** history/memory into preload (adapter does this when state keys exist).
 4. Wire `bind_memory_invalidation` / `on_fact_corrected` for the consistency contract.
 5. Keep `CACHE_PREDATES_FACT_UPDATE` enabled even if prevention hooks fail (dual-rail).
+6. Call `require_shine(compiled, gate)` at compile time — fails fast if Shine is not wired.
+7. Map LLM provider failures into `TraceStep(kind="llm", status=error|empty|timeout)` (or pass `llm_error=` to `shine_after_hook`).
+8. Set `consumes=` / `expect_trace_kinds` so `TRACE_INCOMPLETE` fires instead of silent dormancy.
+9. For multi-hop graphs set `node_state.answer_source_hop` to avoid `PARALLEL_PRELOAD_AMBIGUITY`.
+
+### RuntimeAdapter (any orchestrator)
+
+Implement `extract_bundle` / `enforce` / `pre_llm_hook` / `post_llm_hook` (`prismshine.runtime.RuntimeAdapter`).
+Shipped: `ChorusGraphAdapter`, `LangGraphAdapter`, `DictStateAdapter` (`make_dict_adapter`).
+Conformance: `tests/test_runtime_conformance.py`. BYO proof (no ChorusGraph): `tests/test_byo_runtime.py`.
+
+Generic wiring (preferred for LangGraph / custom stacks): `prismshine.wiring` —
+`wrap_llm`, `pre_llm_check` / `post_llm_check`, `shine_verify_node`, `record_*` trace helpers,
+`require_shine_wiring`, `ShineDecision`. Feature parity table: `docs/INTEGRATION.md` §8.
 
 ## 4. Thresholds need receipts
 

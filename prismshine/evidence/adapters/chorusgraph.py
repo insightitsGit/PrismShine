@@ -16,11 +16,22 @@ def _normalize_kind(raw: str | None) -> str:
         "tool": "tool",
         "tools": "tool",
         "cache": "cache",
+        "cache.decision": "cache",
         "llm": "llm",
         "memory": "memory",
         "guard": "guard",
     }
-    return mapping.get(k, "other")
+    if k in mapping:
+        return mapping[k]
+    if k.startswith("cache"):
+        return "cache"
+    if k.startswith("retriev"):
+        return "retrieval"
+    if k.startswith("llm"):
+        return "llm"
+    if k.startswith("tool"):
+        return "tool"
+    return "other"
 
 
 def bundle_from_chorusgraph(
@@ -124,23 +135,27 @@ def bundle_from_chorusgraph(
             d = step
         else:
             d = {
-                "hop": getattr(step, "hop", f"hop{i}"),
+                "hop": getattr(step, "hop", None) or getattr(step, "node", f"hop{i}"),
                 "kind": getattr(step, "kind", "other"),
-                "detail": getattr(step, "detail", {}),
-                "scores": getattr(step, "scores", {}),
+                "detail": getattr(step, "detail", {}) or {},
+                "scores": getattr(step, "scores", {}) or {},
                 "status": getattr(step, "status", "ok"),
                 "duration_ms": getattr(step, "duration_ms", None),
             }
         detail = dict(d.get("detail") or {})
+        # ChorusGraph LedgerStep uses node=; shine TraceStep uses hop=
+        hop = d.get("hop") or d.get("node") or f"hop{i}"
         kind = _normalize_kind(d.get("kind") or detail.get("kind"))
         status = d.get("status") or detail.get("status") or "ok"
         if kind == "retrieval" and detail.get("n_chunks") == 0:
             status = "empty"
         if kind == "cache" and "decision" not in detail and "kind" in detail:
             detail["decision"] = detail["kind"]
+        if kind == "cache" and "decision" not in detail and d.get("cache_hit") is not None:
+            detail["decision"] = "HIT_REUSE" if d.get("cache_hit") else "MISS"
         trace.append(
             {
-                "hop": str(d.get("hop") or f"hop{i}"),
+                "hop": str(hop),
                 "kind": kind,
                 "status": status,
                 "scores": dict(d.get("scores") or {}),
@@ -149,7 +164,28 @@ def bundle_from_chorusgraph(
             }
         )
 
-    node_state = dict(state)
+    # Drop non-JSON / ledger payload keys — they belong in trace, not node_state hash.
+    _skip_state = {
+        "ledger_steps",
+        "_ledger_steps",
+        "ledger",
+        "route_ledger",
+        "docs",
+        "chunks",
+        "preload",
+        "history",
+        "messages",
+        "memory",
+        "recalls",
+        "prism_sequence",
+        "vector_hops",
+    }
+    node_state: dict[str, Any] = {}
+    for k, v in state.items():
+        if k in _skip_state or k.startswith("_"):
+            continue
+        if _is_jsonish(v):
+            node_state[k] = v
     consumes = state.get("consumes") or []
     if consumes:
         node_state["consumes"] = list(consumes)
@@ -160,6 +196,12 @@ def bundle_from_chorusgraph(
         ]
         if missing:
             node_state["missing_keys"] = missing
+    if state.get("expect_trace_kinds"):
+        node_state["expect_trace_kinds"] = list(state["expect_trace_kinds"])
+    if state.get("parallel_hops") is not None:
+        node_state["parallel_hops"] = state["parallel_hops"]
+    if state.get("answer_source_hop") is not None:
+        node_state["answer_source_hop"] = state["answer_source_hop"]
 
     data = {
         "run_id": run_id or str(state.get("run_id") or "chorusgraph"),
@@ -173,3 +215,13 @@ def bundle_from_chorusgraph(
         "context_budget": state.get("context_budget"),
     }
     return bundle_from_dict(data)
+
+
+def _is_jsonish(value: Any) -> bool:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return True
+    if isinstance(value, list):
+        return all(_is_jsonish(x) for x in value)
+    if isinstance(value, dict):
+        return all(isinstance(k, str) and _is_jsonish(v) for k, v in value.items())
+    return False

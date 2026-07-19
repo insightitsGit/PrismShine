@@ -67,6 +67,8 @@ pip install -e ".[dev]"
 # optional extras: coverage (prismlang), spans, chorusgraph, langgraph, guard, judge-openai, judge-gemini
 ```
 
+Any runtime (LangGraph / custom) gets the same Shine features as ChorusGraph via `prismshine.wiring` — see `docs/INTEGRATION.md` §8.
+
 ## Quick start
 
 ```python
@@ -107,6 +109,8 @@ gate = ShineGate.build(profile="clinical")  # merges builtin clinical.yaml pack
 ```
 
 `gate.capabilities()` reports `span_backend` (`onnx`|`lexical`|`unavailable`), `threshold_status`, and `pass_means`.
+
+Pin Tier-3 for CI reproducibility: `PRISMSHINE_SPAN_MODEL` (HF model id) and/or `PRISMSHINE_SPAN_ONNX` (local `.onnx` path). Without a pin/artifact the gate honestly reports `span_backend=lexical`. Run `prismshine calibrate` so `threshold_status` leaves `proposal` before accuracy claims.
 
 ## Status
 
