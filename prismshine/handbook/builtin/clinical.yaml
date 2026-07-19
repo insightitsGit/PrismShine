@@ -1,0 +1,22 @@
+# Clinical domain pack — severity promotions + advice (OSS load point; no license gate in v0)
+handbook_version: "0.1.0-clinical"
+signatures:
+  - id: STAGED_FACT_SERVED
+    severity: error
+    advice: "Staged (unconsolidated) clinical fact for subject '{subject}' was served. Do not act on staged facts; confirm with consolidated memory or the clinician."
+
+  - id: LOW_RELEVANCE_RETRIEVAL
+    severity: fatal
+    advice: "Retrieval hop '{hop}' max {score_key}={max_score:.3f} below clinical floor. Halt generation — off-topic clinical context is unsafe."
+
+  - id: MARGINAL_CACHE_HIT
+    severity: error
+    advice: "Cache hop '{hop}' HIT_REUSE verify_score={score:.3f} within {epsilon} of threshold={threshold}. Clinical answers must not ride marginal cache hits."
+
+  - id: CONFLICTING_PRELOAD_FACTS
+    severity: fatal
+    advice: "Conflicting clinical preload for '{subject}' ({relation}): '{value_a}' vs '{value_b}'. Ask a clarifying question; do not guess."
+
+  - id: TOOL_EMPTY_RESULT
+    severity: fatal
+    advice: "Tool hop '{hop}' returned empty payload for a must-ground clinical section. Halt."

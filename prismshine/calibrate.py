@@ -117,7 +117,11 @@ def calibrate_labeled(
     pairs: list[tuple[EvidenceBundle, bool]],
     gate: ShineGate | None = None,
     version: str = "cal-labeled-0.1",
+    *,
+    apply_to_gate: bool = True,
 ) -> CalibrationReport:
+    from prismshine.policy import apply_calibration_receipt
+
     gate = gate or ShineGate.build()
     rows = _scores(gate, pairs)
     auroc = _auroc(rows)
@@ -143,15 +147,31 @@ def calibrate_labeled(
         fn = sum(1 for p, (_, y) in zip(pred, rows, strict=True) if (not p) and y)
         prec[name] = tp / max(tp + fp, 1)
         rec[name] = tp / max(tp + fn, 1)
+    thresholds = {
+        "fused_flag": best_t,
+        "tau_sent": gate.policy.tau_sent,
+        "tau_floor": gate.policy.tau_floor,
+        "tau_tok": gate.policy.tau_tok,
+    }
+    if apply_to_gate:
+        apply_calibration_receipt(
+            gate.policy, thresholds=thresholds, status="validated-labeled"
+        )
+        gate.calibration_version = version
+        gate._caps = gate._detect_capabilities()
     return CalibrationReport(
         mode="labeled",
         n_samples=len(pairs),
         auroc=auroc,
         precision_at_bands=prec,
         recall_at_bands=rec,
-        thresholds={"fused_flag": best_t, "tau_sent": gate.policy.tau_sent},
+        thresholds=thresholds,
         curves={"grounding.risk_coverage": [(0.0, 0.0), (1.0, 1.0)]},
         version=version,
+        notes=[
+            f"Receipt status=validated-labeled; AUROC={auroc}",
+            "Threshold matrix was proposal until this calibrate() run.",
+        ],
     )
 
 
@@ -160,11 +180,28 @@ def calibrate_synthetic(
     gate: ShineGate | None = None,
     seed: int = 0,
     version: str = "cal-synth-0.1",
+    *,
+    apply_to_gate: bool = True,
 ) -> CalibrationReport:
+    from prismshine.policy import apply_calibration_receipt
+
     pairs = synthetic_negatives(grounded, seed=seed)
-    report = calibrate_labeled(pairs, gate=gate, version=version)
+    report = calibrate_labeled(
+        pairs, gate=gate, version=version, apply_to_gate=False
+    )
     report.mode = "synthetic"
-    report.notes.append("Deterministic perturbations; zero LLM calls.")
+    report.notes = [
+        "Deterministic perturbations; zero LLM calls.",
+        "Receipt status=validated-synthetic (not a substitute for labeled domain review).",
+    ]
+    if apply_to_gate and gate is not None:
+        apply_calibration_receipt(
+            gate.policy,
+            thresholds=report.thresholds,
+            status="validated-synthetic",
+        )
+        gate.calibration_version = version
+        gate._caps = gate._detect_capabilities()
     return report
 
 

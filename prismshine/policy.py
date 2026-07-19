@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from prismshine.models import Strictness
 
 STRICTNESS_ORDER: list[Strictness] = ["lenient", "standard", "strict", "paranoid"]
 
-# DESIGN §5.5 default threshold matrix
+ThresholdStatus = Literal["proposal", "validated-synthetic", "validated-labeled"]
+
+# DESIGN §5.5 default threshold matrix — status is proposal until calibrate receipts land
 PROFILE_MATRIX: dict[str, dict[str, Any]] = {
     "default": {
         "numeric_tolerance": 0.005,
@@ -23,6 +25,10 @@ PROFILE_MATRIX: dict[str, dict[str, Any]] = {
         "tier4_budget": 0.10,
         "escalate_derived": False,
         "jl_allowed": True,
+        "contradiction_forces_tier3": True,
+        "contradiction_forces_judge": False,
+        "mandatory_tier3": False,
+        "threshold_status": "proposal",
     },
     "clinical": {
         "numeric_tolerance": 0.0,
@@ -35,6 +41,10 @@ PROFILE_MATRIX: dict[str, dict[str, Any]] = {
         "tier4_budget": 0.25,
         "escalate_derived": True,
         "jl_allowed": False,
+        "contradiction_forces_tier3": True,
+        "contradiction_forces_judge": True,
+        "mandatory_tier3": True,
+        "threshold_status": "proposal",
     },
     "finance": {
         "numeric_tolerance": 0.0,
@@ -47,6 +57,10 @@ PROFILE_MATRIX: dict[str, dict[str, Any]] = {
         "tier4_budget": 0.15,
         "escalate_derived": True,
         "jl_allowed": True,
+        "contradiction_forces_tier3": True,
+        "contradiction_forces_judge": True,
+        "mandatory_tier3": True,
+        "threshold_status": "proposal",
     },
     "legal": {
         "numeric_tolerance": 0.005,
@@ -59,6 +73,10 @@ PROFILE_MATRIX: dict[str, dict[str, Any]] = {
         "tier4_budget": 0.15,
         "escalate_derived": False,
         "jl_allowed": True,
+        "contradiction_forces_tier3": True,
+        "contradiction_forces_judge": False,
+        "mandatory_tier3": False,
+        "threshold_status": "proposal",
     },
 }
 
@@ -86,6 +104,9 @@ class EffectivePolicy:
     jl_allowed: bool
     halt_on_fatal: bool = True
     mandatory_tier3: bool = False
+    contradiction_forces_tier3: bool = True
+    contradiction_forces_judge: bool = False
+    threshold_status: ThresholdStatus = "proposal"
     weights: dict[str, float] = field(
         default_factory=lambda: {
             "fatal": 1.0,
@@ -117,12 +138,12 @@ def resolve_policy(
     effective = bump_strictness(strictness, dynamic_bump) if dynamic_bump else strictness
     shift = STRICTNESS_BAND_SHIFT[effective]
     bands = tuple(max(0.0, min(1.0, b + shift)) for b in base["bands"])
-    # ensure monotonic
     b0, b1, b2 = bands
     b1 = max(b1, b0 + 0.05)
     b2 = max(b2, b1 + 0.05)
     bands = (b0, b1, min(b2, 0.99))
 
+    mandatory = bool(base.get("mandatory_tier3")) or (effective == "paranoid")
     pol = EffectivePolicy(
         profile=profile if profile in PROFILE_MATRIX else "default",
         strictness=strictness,
@@ -137,7 +158,10 @@ def resolve_policy(
         escalate_derived=bool(base["escalate_derived"]),
         jl_allowed=bool(base["jl_allowed"]),
         halt_on_fatal=halt_on_fatal,
-        mandatory_tier3=(effective == "paranoid"),
+        mandatory_tier3=mandatory,
+        contradiction_forces_tier3=bool(base.get("contradiction_forces_tier3", True)),
+        contradiction_forces_judge=bool(base.get("contradiction_forces_judge", False)),
+        threshold_status=base.get("threshold_status", "proposal"),  # type: ignore[arg-type]
     )
     if overrides:
         for key, val in overrides.items():
@@ -150,3 +174,24 @@ def resolve_policy(
             if key == "weights" and isinstance(val, dict):
                 pol.weights.update(val)
     return pol
+
+
+def apply_calibration_receipt(
+    policy: EffectivePolicy,
+    *,
+    thresholds: dict[str, float] | None = None,
+    status: ThresholdStatus = "validated-synthetic",
+) -> EffectivePolicy:
+    """Apply calibrate() overlay thresholds and mark receipt status."""
+    if thresholds:
+        if "tau_sent" in thresholds:
+            policy.tau_sent = float(thresholds["tau_sent"])
+        if "tau_floor" in thresholds:
+            policy.tau_floor = float(thresholds["tau_floor"])
+        if "tau_tok" in thresholds:
+            policy.tau_tok = float(thresholds["tau_tok"])
+        if "fused_flag" in thresholds:
+            b0, b1, b2 = policy.bands
+            policy.bands = (b0, float(thresholds["fused_flag"]), b2)
+    policy.threshold_status = status
+    return policy

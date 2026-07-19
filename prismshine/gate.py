@@ -40,8 +40,12 @@ class Capabilities:
     coverage_mode: str
     encoder_model_id: str | None
     span_classifier: bool
+    span_backend: str
     judge: bool
     handbook_version: str
+    buffered_display: bool
+    threshold_status: str
+    pass_means: str
     notes: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -50,8 +54,12 @@ class Capabilities:
             "coverage_mode": self.coverage_mode,
             "encoder_model_id": self.encoder_model_id,
             "span_classifier": self.span_classifier,
+            "span_backend": self.span_backend,
             "judge": self.judge,
             "handbook_version": self.handbook_version,
+            "buffered_display": self.buffered_display,
+            "threshold_status": self.threshold_status,
+            "pass_means": self.pass_means,
             "notes": self.notes,
         }
 
@@ -69,6 +77,7 @@ class ShineGate:
         config: ShineConfig | None = None,
         calibration_version: str = "identity-0",
         calibration_curves: dict[str, list[tuple[float, float]]] | None = None,
+        buffered_display: bool = True,
     ) -> None:
         self.handbook = handbook
         self.policy = policy
@@ -79,6 +88,7 @@ class ShineGate:
         self.config = config or get_config()
         self.calibration_version = calibration_version
         self.calibration_curves = calibration_curves or {}
+        self.buffered_display = buffered_display
         self.audit = AuditLog()
         self.budget = EscalationBudget(policy.tier4_budget)
         self._tier0_cache: dict[str, Any] = {}
@@ -96,6 +106,8 @@ class ShineGate:
         strictness: Strictness = "standard",
         overrides: dict[str, Any] | None = None,
         config: ShineConfig | None = None,
+        buffered_display: bool = True,
+        domain_pack: bool = True,
     ) -> ShineGate:
         cfg = (config or get_config()).merge(
             {
@@ -103,18 +115,23 @@ class ShineGate:
                 "strictness": strictness,
             }
         )
+        domain = (
+            cfg.profile
+            if domain_pack and cfg.profile in {"clinical", "finance", "legal"}
+            else None
+        )
         if handbook is None or handbook == "builtin":
-            hb = load_handbook()
+            hb = load_handbook(domain=domain)
         elif isinstance(handbook, (str, Path)):
             if str(handbook) == "builtin":
-                hb = load_handbook()
+                hb = load_handbook(domain=domain)
             else:
-                hb = load_handbook(handbook)
+                hb = load_handbook(handbook, domain=domain)
         else:
-            hb = load_handbook(*handbook)
+            hb = load_handbook(*handbook, domain=domain)
 
         if cfg.handbook_path:
-            hb = load_handbook(cfg.handbook_path)
+            hb = load_handbook(cfg.handbook_path, domain=domain)
 
         pol = resolve_policy(
             profile=cfg.profile,
@@ -145,18 +162,42 @@ class ShineGate:
             span_classifier=span,
             verdict_store=store,
             config=cfg,
+            buffered_display=buffered_display,
         )
 
     def _detect_capabilities(self) -> Capabilities:
         notes: list[str] = []
-        span_ok = bool(self.span_classifier and self.span_classifier.available)
-        if self.span_classifier and not span_ok:
+        span_backend = "unavailable"
+        span_ok = False
+        if self.span_classifier is not None:
+            span_ok = self.span_classifier.available
+            span_backend = self.span_classifier.backend
+        if span_backend == "unavailable":
             notes.append("Tier 3 unavailable -> unresolved gray resolves to flag")
+        elif span_backend == "lexical":
+            notes.append(
+                "span_backend=lexical (no ONNX LettuceDetect artifact) -> degraded Tier 3"
+            )
         if self.encoder.mode == "lexical":
             notes.append("coverage_mode=lexical (no prismlang/user embedder)")
             notes.append("JL fallback threshold 0.80 needs calibration")
         if self.judge is None:
             notes.append("no judge configured -> gray cannot escalate to Tier 4")
+            if self.policy.contradiction_forces_judge:
+                notes.append(
+                    "profile requires judge on contradiction cues; without judge those cases flag"
+                )
+        if self.buffered_display:
+            notes.append(
+                "buffered_display=true: verify completed answer before display (no mid-stream verify)"
+            )
+        if self.policy.threshold_status == "proposal":
+            notes.append(
+                "threshold_status=proposal: run prismshine calibrate for receipts before accuracy claims"
+            )
+        notes.append(
+            "PASS means grounded in preload, not world-true (see docs/LIMITS.md)"
+        )
         return Capabilities(
             tiers={
                 "0": True,
@@ -168,8 +209,12 @@ class ShineGate:
             coverage_mode=self.encoder.mode,
             encoder_model_id=self.encoder.model_id,
             span_classifier=span_ok,
+            span_backend=span_backend,
             judge=self.judge is not None,
             handbook_version=self.handbook.handbook_version,
+            buffered_display=self.buffered_display,
+            threshold_status=self.policy.threshold_status,
+            pass_means="grounded_in_preload_not_world_true",
             notes=notes,
         )
 
@@ -292,6 +337,12 @@ class ShineGate:
         )
         signals.extend(cc.signals)
         spans.extend(cc.spans)
+        # Hard facts (numbers/currency/IDs) that survive arithmetic closure are
+        # deterministic evidence of fabrication; cosine coverage is number-blind
+        # (DESIGN §5.2), so these floor the verdict at `flag` and force Tier 3.
+        hard_unmatched = [
+            f for f in cc.unmatched if f.kind in {"number", "currency", "id"}
+        ]
 
         # --- Tier 2 ---
         if not policy.jl_allowed and any(
@@ -397,18 +448,22 @@ class ShineGate:
             policy,
             calibration=self.calibration_curves,
         )
+        has_cues = bool(cov.contradiction_cues)
         need_t3 = (
             probe.band == "gray"
             or policy.mandatory_tier3
             or bool(cov.mandatory_tier3)
-            or bool(cov.contradiction_cues)
+            or (has_cues and policy.contradiction_forces_tier3)
+            or bool(hard_unmatched)
         )
 
         # --- Tier 3 ---
         gray_unresolved = False
+        span_backend = "unavailable"
         if need_t3:
             if self.span_classifier and self.span_classifier.available:
                 tier_reached = 3
+                span_backend = self.span_classifier.backend
                 sr = self.span_classifier.classify(
                     bundle,
                     candidate_spans=cov.mandatory_tier3 + cov.uncovered_spans + cc.spans,
@@ -416,6 +471,9 @@ class ShineGate:
                 )
                 signals.extend(sr.signals)
                 spans.extend(sr.spans)
+                # Lexical Tier-3 is degraded — do not treat as full gray resolution
+                if span_backend == "lexical" and probe.band == "gray":
+                    gray_unresolved = True
             else:
                 gray_unresolved = True
 
@@ -429,11 +487,17 @@ class ShineGate:
         )
 
         # --- Tier 4 ---
+        # High-stakes profiles force judge on contradiction cues (or flag if absent).
+        force_judge = has_cues and policy.contradiction_forces_judge
+        need_judge = (probe.band == "gray" or force_judge) and self.judge is not None
         judge_present = False
-        if probe.band == "gray" and self.judge is not None and self.budget.allow():
+        if need_judge and self.budget.allow():
             tier_reached = 4
             judge_present = True
-            claims = split_sentences(bundle.answer)
+            # Prefer cue sentences + hard unmatched as claims
+            claims = [c.sentence for c in cov.contradiction_cues] or split_sentences(
+                bundle.answer
+            )
             context = "\n".join(c.text for c in bundle.preload)
             result = self.judge(claims, context)
             signals.append(
@@ -442,10 +506,10 @@ class ShineGate:
                     tier=4,
                     value=result.risk,
                     weight=0.45,
-                    detail={"claims": result.claim_support},
+                    detail={"claims": result.claim_support, "forced": force_judge},
                 )
             )
-        elif probe.band == "gray" and self.judge is None:
+        elif (probe.band == "gray" or force_judge) and self.judge is None:
             gray_unresolved = True
 
         fused = fuse(
@@ -464,10 +528,44 @@ class ShineGate:
             decision = "flag"
             gate = "MISSING_CAPABILITY_FLAG"
 
+        # Hard-fact decision floor: an unmatched number/currency/ID is exact-match
+        # evidence — fuzzy tiers may escalate it further but never clear it back
+        # to pass. Fabricated figures are the most damaging class (DESIGN §5.1).
+        if hard_unmatched and decision == "pass":
+            decision = "flag"
+            gate = "T1_UNMATCHED_HARD_FACT"
+
+        # Contradiction cues without resolution cannot PASS on high-stakes profiles
+        if has_cues and decision == "pass":
+            if force_judge and not judge_present:
+                decision = "flag"
+                gate = "T2_CONTRADICTION_UNRESOLVED"
+            elif policy.contradiction_forces_tier3 and span_backend != "onnx":
+                decision = "flag"
+                gate = "T2_CONTRADICTION_CUE"
+
         advice = [h.advice for h in forensics.hits if h.advice]
-        if decision == "regenerate":
+        if hard_unmatched:
             advice.append(
-                "Regenerate with feedback: unsupported spans + signature advice (bounded 1 attempt)."
+                "Unmatched hard facts (not in preload, not derivable): "
+                + ", ".join(f"{f.raw} [{f.kind}]" for f in hard_unmatched[:5])
+            )
+        if has_cues:
+            advice.append(
+                "Contradiction cues vs preload; do not treat high cosine as support. "
+                + "; ".join(c.reason for c in cov.contradiction_cues[:3])
+            )
+        if decision == "regenerate":
+            from prismshine.regen import build_repair_feedback
+
+            repair = build_repair_feedback(
+                spans=spans,
+                advice=advice,
+                signatures=[h.id for h in forensics.hits],
+            )
+            advice.append(
+                "Regenerate with structured feedback (bounded 1 attempt): "
+                + repair["prompt_suffix"]
             )
 
         verdict = ShineVerdict(

@@ -10,6 +10,8 @@ import yaml
 
 from prismshine.handbook.schema import Handbook, SignatureDef
 
+BUILTIN_DOMAIN_PACKS = frozenset({"clinical", "finance", "legal", "core"})
+
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
@@ -45,31 +47,47 @@ def _merge_signatures(
     return list(by_id.values())
 
 
+def _load_pack(spec: str | Path) -> dict[str, Any]:
+    """Load a pack from filesystem path or builtin name (clinical|finance|legal)."""
+    name = str(spec)
+    stem = Path(name).stem if name.endswith((".yaml", ".yml")) else name
+    # Prefer filesystem when it exists
+    p = Path(spec)
+    if p.exists() and p.is_file():
+        return _load_yaml(p)
+    # Builtin name
+    if stem in BUILTIN_DOMAIN_PACKS or stem in {"clinical", "finance", "legal", "core"}:
+        return _load_builtin(f"{stem}.yaml")
+    raise FileNotFoundError(f"Handbook pack not found: {spec}")
+
+
 def load_handbook(
     *extra_paths: str | Path,
     builtin: str = "core.yaml",
+    domain: str | None = None,
 ) -> Handbook:
-    """Merge order: builtin → each extra path (domain packs → tenant overrides)."""
+    """Merge order: builtin core -> domain pack -> each extra path (tenant overrides)."""
     data = _load_builtin(builtin)
     version = str(data.get("handbook_version") or "0.1.0")
     signatures = list(data.get("signatures") or [])
 
-    for path in extra_paths:
+    packs: list[str | Path] = []
+    if domain:
+        packs.append(domain)
+    packs.extend(extra_paths)
+
+    for path in packs:
         if path is None:
             continue
-        p = Path(path)
-        if not p.exists():
-            raise FileNotFoundError(f"Handbook pack not found: {p}")
-        overlay = _load_yaml(p)
+        overlay = _load_pack(path)
         if overlay.get("handbook_version"):
             version = str(overlay["handbook_version"])
         signatures = _merge_signatures(signatures, list(overlay.get("signatures") or []))
 
-    handbook = Handbook(
+    return Handbook(
         handbook_version=version,
         signatures=[SignatureDef(**s) for s in signatures],
     )
-    return handbook
 
 
 def format_advice(template: str, **fields: Any) -> str:

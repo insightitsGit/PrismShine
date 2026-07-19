@@ -13,7 +13,7 @@ def _embed(texts):
     out = np.zeros((len(texts), dim))
     for i, t in enumerate(texts):
         for tok in t.lower().split():
-            out[i, hash(tok) % dim] += 1
+            out[i, int.from_bytes(__import__("hashlib").md5(tok.encode()).digest()[:4], "little") % dim] += 1
         n = np.linalg.norm(out[i]) or 1
         out[i] /= n
     return out

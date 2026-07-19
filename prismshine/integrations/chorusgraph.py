@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from prismshine.evidence.adapters.chorusgraph import bundle_from_chorusgraph
 from prismshine.gate import ShineGate
+from prismshine.regen import build_repair_feedback, next_route
 from prismshine.models import ShineVerdict
 
 logger = logging.getLogger(__name__)
@@ -69,24 +70,31 @@ def shine_node(
                 },
             },
         }
-        if verdict.decision == "block":
+        route = next_route(verdict.decision, attempts, max_attempts=max_regenerate)
+        if verdict.decision == "block" or route == "block":
             out[answer_key] = state.get("shine_fallback") or (
                 "I don't have reliable grounded data for that."
             )
             out["shine_route"] = "block"
-        elif verdict.decision == "regenerate" and attempts < max_regenerate:
+        elif route == "regenerate":
+            repair = build_repair_feedback(
+                spans=verdict.spans,
+                advice=list(verdict.advice),
+                signatures=[s.id for s in verdict.signatures],
+            )
+            repair["target"] = regenerate_target or "generate"
             out["_shine_regen_attempts"] = attempts + 1
             out["shine_route"] = "regenerate"
-            out["shine_repair_feedback"] = {
-                "spans": [s.model_dump() for s in verdict.spans],
-                "advice": verdict.advice,
-                "target": regenerate_target or "generate",
-            }
+            out["shine_repair_feedback"] = repair
+            # Generators that honor this key append it to the next prompt.
+            out["shine_repair_prompt"] = repair["prompt_suffix"]
         elif verdict.decision == "regenerate":
+            # Bound exhausted -> degrade to flag (ADR-7), keep answer for review
             out["shine_route"] = "flag"
             out[answer_key] = state.get(answer_key)
+            out["shine_regen_exhausted"] = True
         else:
-            out["shine_route"] = verdict.decision
+            out["shine_route"] = route
         return out
 
     return _node

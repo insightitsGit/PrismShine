@@ -1,0 +1,18 @@
+# Legal domain pack
+handbook_version: "0.1.0-legal"
+signatures:
+  - id: CATEGORY_MISMATCH
+    severity: error
+    advice: "Retrieval hop '{hop}' category '{chunk_cat}' disagrees with query category '{query_cat}'. Legal citations from the wrong taxonomy are high risk."
+
+  - id: MISSING_STATE_KEY
+    severity: fatal
+    advice: "Generator referenced empty state key '{key}'. Legal answers must not invent missing citations or party names."
+
+  - id: CONFLICTING_PRELOAD_FACTS
+    severity: error
+    advice: "Conflicting legal preload for '{subject}' ({relation}): '{value_a}' vs '{value_b}'. Surface both sources; do not pick one silently."
+
+  - id: PARTIAL_RETRIEVAL
+    severity: error
+    advice: "Retrieval hop '{hop}' returned {n} of top_k={top_k} (min_expected={min_chunks_expected}). Incomplete authority sets risk hallucinated citations."

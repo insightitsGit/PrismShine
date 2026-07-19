@@ -11,7 +11,11 @@ from prismshine.models import EvidenceBundle, Signal, Span
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL_ID = "Kriso/lettuce-detect-base"
+# Candidate hubs (first successful ONNX+tokenizer wins). LettuceDetect-class.
+DEFAULT_MODEL_CANDIDATES = (
+    "Kriso/lettuce-detect-base",
+    "lettucedetect/lettucedetect-base-modernbert",
+)
 DEFAULT_ARTIFACT = "lettucedetect-onnx-v1"
 
 
@@ -22,33 +26,45 @@ class SpanResult:
     signals: list[Signal] = field(default_factory=list)
     artifact_id: str | None = None
     available: bool = False
+    backend: str = "unavailable"  # onnx | lexical | unavailable
 
 
 class SpanClassifier:
-    """Lazy-loaded ONNX span classifier."""
+    """Lazy-loaded ONNX span classifier with honest backend reporting."""
 
     def __init__(
         self,
-        model_id: str = DEFAULT_MODEL_ID,
+        model_id: str | None = None,
         tau_tok: float = 0.5,
         cache_dir: str | Path | None = None,
+        allow_lexical_fallback: bool = True,
     ) -> None:
-        self.model_id = model_id
+        self.model_id = model_id or DEFAULT_MODEL_CANDIDATES[0]
+        self.model_candidates = (
+            (model_id,) if model_id else DEFAULT_MODEL_CANDIDATES
+        )
         self.tau_tok = tau_tok
         self.cache_dir = Path(cache_dir or Path.home() / ".prismshine" / "models")
+        self.allow_lexical_fallback = allow_lexical_fallback
         self._session: Any = None
         self._tokenizer: Any = None
         self.artifact_id: str | None = None
         self._load_error: str | None = None
+        self._backend: str = "unavailable"
 
     @property
     def available(self) -> bool:
         return self._ensure_loaded()
 
+    @property
+    def backend(self) -> str:
+        self._ensure_loaded()
+        return self._backend
+
     def _ensure_loaded(self) -> bool:
         if self._session is not None:
             return True
-        if self._load_error:
+        if self._load_error and not self.allow_lexical_fallback:
             return False
         try:
             import onnxruntime as ort  # type: ignore
@@ -56,54 +72,68 @@ class SpanClassifier:
             from tokenizers import Tokenizer  # type: ignore
         except ImportError as exc:
             self._load_error = f"spans extra missing: {exc}"
+            self._backend = "unavailable"
             logger.debug(self._load_error)
             return False
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         try:
-            # Prefer an ONNX file from the hub; fall back to heuristic lexical spans
-            # if the specific export is unavailable — still a real detector, not a stub.
-            onnx_path = None
-            for candidate in (
-                "model.onnx",
-                "onnx/model.onnx",
-                "lettucedetect.onnx",
-            ):
-                try:
-                    onnx_path = hf_hub_download(
-                        repo_id=self.model_id,
-                        filename=candidate,
-                        cache_dir=str(self.cache_dir),
+            for repo in self.model_candidates:
+                onnx_path = None
+                for candidate in (
+                    "model.onnx",
+                    "onnx/model.onnx",
+                    "lettucedetect.onnx",
+                    "model_quantized.onnx",
+                ):
+                    try:
+                        onnx_path = hf_hub_download(
+                            repo_id=repo,
+                            filename=candidate,
+                            cache_dir=str(self.cache_dir),
+                        )
+                        break
+                    except Exception:  # noqa: BLE001
+                        continue
+                tok_path = None
+                for candidate in ("tokenizer.json",):
+                    try:
+                        tok_path = hf_hub_download(
+                            repo_id=repo,
+                            filename=candidate,
+                            cache_dir=str(self.cache_dir),
+                        )
+                        break
+                    except Exception:  # noqa: BLE001
+                        continue
+                if onnx_path and tok_path:
+                    self._session = ort.InferenceSession(
+                        onnx_path, providers=["CPUExecutionProvider"]
                     )
-                    break
-                except Exception:  # noqa: BLE001
-                    continue
-            tok_path = None
-            for candidate in ("tokenizer.json",):
-                try:
-                    tok_path = hf_hub_download(
-                        repo_id=self.model_id,
-                        filename=candidate,
-                        cache_dir=str(self.cache_dir),
-                    )
-                    break
-                except Exception:  # noqa: BLE001
-                    continue
+                    self._tokenizer = Tokenizer.from_file(tok_path)
+                    self.model_id = repo
+                    self.artifact_id = f"{repo}@{Path(onnx_path).name}"
+                    self._backend = "onnx"
+                    return True
 
-            if onnx_path and tok_path:
-                self._session = ort.InferenceSession(
-                    onnx_path, providers=["CPUExecutionProvider"]
+            if self.allow_lexical_fallback:
+                # Honest degradation: deterministic lexical unsupported detector.
+                # capabilities() must report span_backend=lexical (not onnx).
+                self._session = "lexical"
+                self.artifact_id = DEFAULT_ARTIFACT + "+lexical"
+                self._backend = "lexical"
+                self._load_error = (
+                    "no ONNX LettuceDetect artifact on hub; using lexical Tier-3 backend"
                 )
-                self._tokenizer = Tokenizer.from_file(tok_path)
-                self.artifact_id = f"{self.model_id}@{Path(onnx_path).name}"
+                logger.warning(self._load_error)
                 return True
 
-            # No ONNX artifact — use deterministic lexical unsupported detector
-            self._session = "lexical"
-            self.artifact_id = DEFAULT_ARTIFACT + "+lexical"
-            return True
+            self._load_error = "no ONNX span model available"
+            self._backend = "unavailable"
+            return False
         except Exception as exc:  # noqa: BLE001
             self._load_error = str(exc)
+            self._backend = "unavailable"
             logger.debug("span classifier load failed: %s", exc)
             return False
 
@@ -115,9 +145,13 @@ class SpanClassifier:
         tau_tok: float | None = None,
     ) -> SpanResult:
         if not bundle.answer:
-            return SpanResult(unsupported_span_ratio=0.0, available=False)
+            return SpanResult(
+                unsupported_span_ratio=0.0, available=False, backend="unavailable"
+            )
         if not self._ensure_loaded():
-            return SpanResult(unsupported_span_ratio=0.0, available=False)
+            return SpanResult(
+                unsupported_span_ratio=0.0, available=False, backend="unavailable"
+            )
 
         thr = self.tau_tok if tau_tok is None else tau_tok
         preload = "\n".join(c.text for c in bundle.preload)
@@ -137,7 +171,11 @@ class SpanClassifier:
                 value=ratio,
                 weight=0.35,
                 spans=spans,
-                detail={"artifact_id": self.artifact_id, "tau_tok": thr},
+                detail={
+                    "artifact_id": self.artifact_id,
+                    "tau_tok": thr,
+                    "backend": self._backend,
+                },
             )
         ]
         return SpanResult(
@@ -146,6 +184,7 @@ class SpanClassifier:
             signals=signals,
             artifact_id=self.artifact_id,
             available=True,
+            backend=self._backend,
         )
 
     def _lexical_unsupported(

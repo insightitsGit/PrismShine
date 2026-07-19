@@ -1,0 +1,18 @@
+# Finance domain pack
+handbook_version: "0.1.0-finance"
+signatures:
+  - id: MARGINAL_CACHE_HIT
+    severity: error
+    advice: "Cache hop '{hop}' HIT_REUSE verify_score={score:.3f} within {epsilon} of threshold={threshold}. During volatile markets, marginal hits must not silently reuse answers."
+
+  - id: LOW_RELEVANCE_RETRIEVAL
+    severity: error
+    advice: "Retrieval hop '{hop}' max {score_key}={max_score:.3f} below finance floor. Numbers from off-topic chunks are high risk."
+
+  - id: CACHE_CONTEXT_MISUSE
+    severity: error
+    advice: "HIT_AS_CONTEXT from hop '{hop}' was the only support for fact '{fact}'. Finance answers need primary sources, not cache-as-context alone."
+
+  - id: CONFLICTING_PRELOAD_FACTS
+    severity: error
+    advice: "Conflicting finance preload for '{subject}' ({relation}): '{value_a}' vs '{value_b}'. Clarify before quoting figures."

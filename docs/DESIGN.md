@@ -253,6 +253,8 @@ Default signal weights (profile-tunable):
 
 Decision bands (default profile): `fused < 0.25` → pass · `0.25–0.55` → gray (escalate tier, else flag) · `0.55–0.75` → flag or regenerate (policy) · `≥ 0.75` → block/regenerate. Every band boundary crossing names its gate (e.g. `T2_COVERAGE_FAIL`, `T3_SPANS_CONFIRMED`, `HANDBOOK:EMPTY_RETRIEVAL`).
 
+**Hard-fact decision floor (implementation refinement, v0.1):** an unmatched number/currency/ID that survives arithmetic closure is *deterministic* evidence of fabrication — and cosine coverage is number-blind (§5.2), so a fused score alone can leave such an answer in the pass band. Rule: hard unmatched facts force Tier-3 examination and floor the final decision at `flag` (gate `T1_UNMATCHED_HARD_FACT`); fuzzy tiers may escalate further but can never clear exact-match evidence back to `pass`. Entities are excluded from the floor (capitalization heuristics are too noisy); they contribute via the ratio only.
+
 ## 5.5 Strictness, domain profiles, and calibration
 
 Thresholds are the product's real UX. Three principles govern them:

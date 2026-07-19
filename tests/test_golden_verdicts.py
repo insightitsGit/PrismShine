@@ -11,7 +11,7 @@ def fake_embedder(texts: list[str]) -> np.ndarray:
     out = np.zeros((len(texts), dim), dtype=np.float64)
     for i, t in enumerate(texts):
         for tok in t.lower().split():
-            out[i, hash(tok) % dim] += 1.0
+            out[i, int.from_bytes(__import__("hashlib").md5(tok.encode()).digest()[:4], "little") % dim] += 1.0
         n = np.linalg.norm(out[i])
         if n > 0:
             out[i] /= n
@@ -78,6 +78,70 @@ def test_fatal_early_exit_skips_grounding():
     assert v.tier_reached == 0
     assert v.resolution_gate == "HANDBOOK:EMPTY_RETRIEVAL"
     assert v.decision in {"block", "regenerate"}
+
+
+def test_fabricated_number_never_passes():
+    """Hard-fact floor: an unmatched currency figure cannot land in the pass band,
+    even when sentence coverage looks fine (cosine is number-blind)."""
+    gate = ShineGate.build(embedder=fake_embedder)
+    b, _ = bundle_from_dict(
+        {
+            "run_id": "hf1",
+            "question": "What was revenue?",
+            # identical wording to the chunk except the fabricated figure ⇒ high cosine
+            "answer": "Revenue was $9000 in Q1 for Acme Corp.",
+            "preload": [
+                {
+                    "chunk_id": "c1",
+                    "text": "Revenue was $1000 in Q1 for Acme Corp.",
+                    "source": "retrieval",
+                }
+            ],
+            "trace": [
+                {
+                    "hop": "r",
+                    "kind": "retrieval",
+                    "status": "ok",
+                    "scores": {"constructive_score": 0.95},
+                    "detail": {"n_chunks": 3, "top_k": 3},
+                }
+            ],
+        }
+    )
+    v = gate.verify(b)
+    assert v.decision != "pass"
+    assert any(sp.reason == "unmatched_currency" for sp in v.spans)
+
+
+def test_derived_number_not_floored():
+    """Arithmetic closure: a figure derivable from preload numbers is NOT flagged."""
+    gate = ShineGate.build(embedder=fake_embedder)
+    b, _ = bundle_from_dict(
+        {
+            "run_id": "hf2",
+            "question": "How much did revenue grow?",
+            "answer": "Revenue grew by $200 from Q1 to Q2.",
+            "preload": [
+                {
+                    "chunk_id": "c1",
+                    "text": "Revenue was $1000 in Q1. Revenue was $1200 in Q2.",
+                    "source": "retrieval",
+                }
+            ],
+            "trace": [
+                {
+                    "hop": "r",
+                    "kind": "retrieval",
+                    "status": "ok",
+                    "scores": {"constructive_score": 0.95},
+                    "detail": {"n_chunks": 3, "top_k": 3},
+                }
+            ],
+        }
+    )
+    v = gate.verify(b)
+    assert v.resolution_gate != "T1_UNMATCHED_HARD_FACT"
+    assert not any(sp.reason == "unmatched_currency" for sp in v.spans)
 
 
 def test_pregeneration_mode():

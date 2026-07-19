@@ -9,6 +9,12 @@ PrismShine catches hallucinations from both ends in a single unified pipeline:
 
 Both sides fuse into one auditable **ShineVerdict** with a named resolution gate — the same audit-grade decision style as PrismGuard.
 
+> **PASS ≠ true.** A `pass` means the answer is grounded in the provided preload, not that the preload is world-correct. Poisoned or wrong retrieval can still PASS. See [`docs/LIMITS.md`](docs/LIMITS.md).
+>
+> **Buffered only (v0).** PrismShine verifies the completed answer before display. It does not mid-stream verify tokens.
+>
+> **Moat requires wiring.** Standalone dicts give a strong grounding checker. Cause-side halt + cache/memory consistency need ChorusGraph (or equivalent) `trace`, interceptors, and Cortex/cache hooks — checklist in `docs/LIMITS.md`.
+
 ## Design principles
 
 1. **One pipeline, one verdict.** Forensic and grounding signals are fused; there are no separate "phases" a developer has to wire.
@@ -23,6 +29,7 @@ Both sides fuse into one auditable **ShineVerdict** with a named resolution gate
 
 | Doc | Contents |
 |---|---|
+| [`docs/LIMITS.md`](docs/LIMITS.md) | Scope boundaries: PASS≠truth, streaming, moat wiring, threshold receipts |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Full architecture: unified pipeline, data model, scoring math, module layout, performance budget |
 | [`docs/prismshine-architecture.png`](docs/prismshine-architecture.png) | One-page visual of the pipeline, plugins, early exits, and support systems |
 | [`docs/HANDBOOK.md`](docs/HANDBOOK.md) | Failure-signature taxonomy: schema + initial catalog of deterministic detectors |
@@ -91,6 +98,16 @@ prismshine verify bundle.json --profile default
 prismshine calibrate ./samples --mode synthetic
 ```
 
+## Profiles & handbook packs
+
+```python
+gate = ShineGate.build(profile="clinical")  # merges builtin clinical.yaml pack
+# finance / legal likewise. Thresholds remain "proposal" until:
+#   prismshine calibrate ./samples --mode synthetic
+```
+
+`gate.capabilities()` reports `span_backend` (`onnx`|`lexical`|`unavailable`), `threshold_status`, and `pass_means`.
+
 ## Status
 
-Implementation targeting **0.1.0**. Upstream siblings shipped and verified (prismlang 0.1.2, prismlib 0.5.0, prismlib-plus 0.8.0, prismcortex 0.3.0, chorusgraph 1.3.0 — see `docs/UPSTREAM.md`). Design authority: `docs/DESIGN.md`.
+**0.1.0** implemented. Upstream siblings shipped (prismlang 0.1.2, prismlib 0.5.0, prismlib-plus 0.8.0, prismcortex 0.3.0, chorusgraph 1.3.0). Design authority: `docs/DESIGN.md`. Honest limits: `docs/LIMITS.md`.

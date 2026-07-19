@@ -44,6 +44,9 @@ packages = ["prismshine"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "prismshine/handbook/builtin/core.yaml" = "prismshine/handbook/builtin/core.yaml"
+"prismshine/handbook/builtin/clinical.yaml" = "prismshine/handbook/builtin/clinical.yaml"
+"prismshine/handbook/builtin/finance.yaml" = "prismshine/handbook/builtin/finance.yaml"
+"prismshine/handbook/builtin/legal.yaml" = "prismshine/handbook/builtin/legal.yaml"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

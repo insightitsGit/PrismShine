@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from prismshine.models import EvidenceBundle, Signal, Span
 
@@ -220,6 +222,59 @@ def _arithmetic_closure(fact: Fact, preload_nums: list[Fact]) -> bool:
     return False
 
 
+def _looks_structured(answer: str) -> bool:
+    s = answer.strip()
+    return (s.startswith("{") and s.endswith("}")) or (
+        s.startswith("[") and s.endswith("]")
+    )
+
+
+def _flatten_json(obj: Any, prefix: str = "") -> list[tuple[str, str]]:
+    """Return (field_path, string_value) leaves for field-level copy-check."""
+    out: list[tuple[str, str]] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            path = f"{prefix}.{k}" if prefix else str(k)
+            out.extend(_flatten_json(v, path))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            path = f"{prefix}[{i}]"
+            out.extend(_flatten_json(v, path))
+    elif obj is None:
+        return out
+    else:
+        out.append((prefix or "value", str(obj)))
+    return out
+
+
+def extract_structured_facts(answer: str) -> list[Fact]:
+    """Field-level facts from JSON answers (DESIGN §12 structured-output note)."""
+    try:
+        data = json.loads(answer)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    facts: list[Fact] = []
+    for path, value in _flatten_json(data):
+        # Prefer typed extraction on the leaf string
+        leaf_facts = extract_facts(value)
+        if leaf_facts:
+            for lf in leaf_facts:
+                lf.raw = f"{path}={lf.raw}"
+                facts.append(lf)
+        else:
+            # opaque string / enum leaf — treat as entity-like exact match
+            facts.append(
+                Fact(
+                    kind="entity",
+                    raw=f"{path}={value}",
+                    normalized=value.strip().lower(),
+                    start=0,
+                    end=0,
+                )
+            )
+    return facts
+
+
 def copycheck(
     bundle: EvidenceBundle,
     *,
@@ -230,11 +285,29 @@ def copycheck(
     if not bundle.answer:
         return CopyCheckResult(unmatched_ratio=0.0)
 
-    answer_facts = extract_facts(bundle.answer, lexicon=lexicon)
+    structured = _looks_structured(bundle.answer)
+    if structured:
+        answer_facts = extract_structured_facts(bundle.answer)
+        if not answer_facts:
+            answer_facts = extract_facts(bundle.answer, lexicon=lexicon)
+    else:
+        answer_facts = extract_facts(bundle.answer, lexicon=lexicon)
+
     preload_text = "\n".join(c.text for c in bundle.preload)
+    # Also flatten JSON preload chunks for structured matching
+    for c in bundle.preload:
+        if _looks_structured(c.text):
+            try:
+                preload_text += "\n" + " ".join(
+                    v for _, v in _flatten_json(json.loads(c.text))
+                )
+            except (json.JSONDecodeError, TypeError):
+                pass
     preload_facts = extract_facts(preload_text, lexicon=lexicon)
     preload_norms = {f.normalized for f in preload_facts}
+    preload_norms |= {t.strip().lower() for t in preload_text.split() if t.strip()}
     preload_nums = [f for f in preload_facts if f.value is not None]
+    preload_lower = preload_text.lower()
 
     matched: list[Fact] = []
     unmatched: list[Fact] = []
@@ -249,17 +322,24 @@ def copycheck(
                 derived.append(fact)
             else:
                 unmatched.append(fact)
-        elif fact.normalized in preload_norms or fact.raw.lower() in preload_text.lower():
+        elif (
+            fact.normalized in preload_norms
+            or fact.raw.lower() in preload_lower
+            or (fact.normalized and fact.normalized in preload_lower)
+        ):
             matched.append(fact)
         else:
             unmatched.append(fact)
 
     total_w = 0.0
     unmatched_w = 0.0
-    for fact in answer_facts:
+    scored_facts = answer_facts
+    for fact in scored_facts:
         if fact.derived and not escalate_derived:
             continue
         w = WEIGHTS.get(fact.kind, 1.0)
+        if structured and fact.kind in {"number", "currency", "id"}:
+            w *= 1.25  # field-critical boost for structured answers
         total_w += w
         if fact in unmatched or (fact.derived and escalate_derived):
             unmatched_w += w
@@ -286,6 +366,7 @@ def copycheck(
                 "unmatched_count": len(unmatched),
                 "derived_count": len(derived),
                 "matched_count": len(matched),
+                "structured": structured,
             },
         )
     ]

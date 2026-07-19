@@ -13,7 +13,7 @@ def fake_embedder(texts: list[str]) -> np.ndarray:
     out = np.zeros((len(texts), dim), dtype=np.float64)
     for i, t in enumerate(texts):
         for tok in t.lower().split():
-            h = hash(tok) % dim
+            h = int.from_bytes(__import__("hashlib").md5(tok.encode()).digest()[:4], "little") % dim
             out[i, h] += 1.0
         n = np.linalg.norm(out[i])
         if n > 0:
