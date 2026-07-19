@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -108,6 +109,7 @@ class ShineGate:
         config: ShineConfig | None = None,
         buffered_display: bool = True,
         domain_pack: bool = True,
+        calibration_path: str | Path | None = None,
     ) -> ShineGate:
         cfg = (config or get_config()).merge(
             {
@@ -154,7 +156,7 @@ class ShineGate:
         if store is None and cfg.verdict_db:
             store = TieredVerdictStore(sqlite=SqliteVerdictStore(cfg.verdict_db))
 
-        return cls(
+        gate = cls(
             handbook=hb,
             policy=pol,
             encoder=encoder,
@@ -164,6 +166,13 @@ class ShineGate:
             config=cfg,
             buffered_display=buffered_display,
         )
+        # Product path: load calibrate() overlay (env or explicit path)
+        cal_path = calibration_path or os.environ.get("PRISMSHINE_CALIBRATION")
+        if cal_path:
+            from prismshine.calibrate import apply_overlay_to_gate, load_calibration_overlay
+
+            apply_overlay_to_gate(gate, load_calibration_overlay(cal_path))
+        return gate
 
     def _detect_capabilities(self) -> Capabilities:
         notes: list[str] = []

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -11,6 +12,39 @@ from prismshine.grounding.contradiction import ContradictionCue, screen_contradi
 from prismshine.grounding.copycheck import extract_facts
 from prismshine.grounding.splitter import is_boilerplate, is_composite, split_sentences
 from prismshine.models import EvidenceBundle, Signal, Span
+
+_WS = re.compile(r"\s+")
+_TOKEN = re.compile(r"[a-z0-9][a-z0-9'\-]{1,}", re.I)
+_STOP = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "that",
+        "this",
+        "with",
+        "as",
+        "by",
+        "from",
+        "it",
+        "its",
+    }
+)
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
@@ -26,6 +60,61 @@ def _token_overlap(a: str, b: str) -> float:
     if not ta or not tb:
         return 0.0
     return len(ta & tb) / len(ta | tb)
+
+
+def _norm_text(s: str) -> str:
+    return _WS.sub(" ", s).strip().lower()
+
+
+def _content_tokens(s: str) -> list[str]:
+    return [t.lower() for t in _TOKEN.findall(s) if t.lower() not in _STOP]
+
+
+def containment_support(sentence: str, chunk_texts: list[str]) -> float:
+    """Lexical / substring support for extractive answers (HaluEval-style spans).
+
+    Cosine on 1–4 word answers vs long context sentences is near-zero even when
+    the answer is copied from preload. Credit exact / near-exact containment
+    before applying τ_sent.
+    """
+    if not sentence or not chunk_texts:
+        return 0.0
+    sent = _norm_text(sentence)
+    if not sent:
+        return 0.0
+    norms = [_norm_text(t) for t in chunk_texts]
+    corpus = " ".join(norms)
+    corpus_toks = set()
+    for n in norms:
+        corpus_toks.update(_content_tokens(n))
+
+    # Full-span extractive hit (phrase appears as contiguous text)
+    if len(sent) >= 2 and sent in corpus:
+        return 1.0
+
+    toks = _content_tokens(sentence)
+    if not toks:
+        return 0.0
+
+    # Short answers: every content token must appear as a whole token in preload
+    if len(toks) <= 6 or len(sent) <= 48:
+        if all(tok in corpus_toks for tok in toks):
+            return 1.0
+        return 0.0
+
+    # Longer answers: high token recall against a single chunk
+    best = 0.0
+    for chunk in chunk_texts:
+        ctoks = set(_content_tokens(chunk))
+        if not ctoks:
+            continue
+        hit = sum(1 for t in toks if t in ctoks)
+        best = max(best, hit / len(toks))
+    if best >= 0.85:
+        return 1.0
+    if best >= 0.70:
+        return float(best)
+    return 0.0
 
 
 @dataclass
@@ -112,7 +201,12 @@ def coverage_check(
 
     mode = encoder.mode
     chunk_mat, chunk_texts, chunk_ids, jl_only = _chunk_matrix(bundle, encoder)
+    # Always keep raw preload texts for containment (even if vectors missing)
+    if not chunk_texts:
+        chunk_texts = [c.text for c in bundle.preload if c.text]
+        chunk_ids = [c.chunk_id for c in bundle.preload if c.text]
     thr = tau_sent_jl if jl_only else tau_sent
+    containment_hits = 0
     if mode == "lexical" or chunk_mat.shape[0] == 0:
         mode = "lexical"
         supports: list[float] = []
@@ -124,8 +218,13 @@ def coverage_check(
                 continue
             scores = [_token_overlap(s, t) for t in chunk_texts]
             j = int(np.argmax(scores))
-            supports.append(scores[j])
-            best.append((chunk_ids[j], chunk_texts[j]))
+            support = scores[j]
+            cont = containment_support(s, chunk_texts)
+            if cont > support:
+                containment_hits += 1
+                support = cont
+            supports.append(support)
+            best.append((chunk_ids[j] if chunk_ids else "", chunk_texts[j]))
         # lexical uses stricter promotion: thr higher
         thr = max(thr, 0.35)
     else:
@@ -154,6 +253,10 @@ def coverage_check(
                 if norm > 1e-12:
                     combo = combo / norm
                     support = max(support, _cosine(sv[i], combo))
+            cont = containment_support(s, chunk_texts)
+            if cont > support:
+                containment_hits += 1
+                support = cont
             supports.append(support)
             best.append((chunk_ids[j], chunk_texts[j]))
 
@@ -215,6 +318,7 @@ def coverage_check(
                 "tau_sent": thr,
                 "jl_only": jl_only,
                 "mode": mode,
+                "containment_hits": containment_hits,
             },
         )
     ]

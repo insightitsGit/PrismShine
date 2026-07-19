@@ -7,7 +7,6 @@ risk = 1 - faithfulness; label hallucinated when faithfulness < 0.5.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 
@@ -58,7 +57,9 @@ def health() -> dict:
 
 
 @app.post("/evaluate")
-def evaluate(req: EvalRequest) -> dict:
+async def evaluate(req: EvalRequest) -> dict:
+    # Async endpoint: reuse uvicorn's single event loop. asyncio.run() per request
+    # breaks httpx/anyio (cancel-scope crosses loops) once connections are reused.
     from ragas.dataset_schema import SingleTurnSample
 
     scorer = _get_scorer()
@@ -69,7 +70,7 @@ def evaluate(req: EvalRequest) -> dict:
     )
     t0 = time.perf_counter()
     try:
-        score = asyncio.run(scorer.single_turn_ascore(sample))
+        score = await scorer.single_turn_ascore(sample)
         score = float(score) if score == score else 0.5  # NaN -> unknown midpoint
         error = None
     except Exception as exc:  # noqa: BLE001

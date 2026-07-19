@@ -113,30 +113,135 @@ def _auroc(rows: list[tuple[float, bool]]) -> float | None:
     return correct / total if total else None
 
 
+def fit_effect_thresholds(
+    pairs: list[tuple[EvidenceBundle, bool]],
+    gate: ShineGate,
+    *,
+    tau_sent_grid: list[float] | None = None,
+    tau_floor_grid: list[float] | None = None,
+) -> dict[str, float]:
+    """Grid-search coverage + fused-pass thresholds for decision F1.
+
+    This is the product calibration path for effect-side FP/FN (domain packs and
+    bench calibrated rows both call this — not a bench-only hack).
+    """
+    from prismshine.policy import apply_calibration_receipt
+
+    tau_sents = tau_sent_grid or [0.45, 0.50, 0.55, 0.62, 0.68, 0.72]
+    tau_floors = tau_floor_grid or [0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+    base_bands = gate.policy.bands
+    base_tau_sent = gate.policy.tau_sent
+    base_tau_floor = gate.policy.tau_floor
+    best_f1 = -1.0
+    best: dict[str, float] = {
+        "fused_pass": base_bands[0],
+        "fused_flag": base_bands[1],
+        "fused_act": base_bands[2],
+        "tau_sent": base_tau_sent,
+        "tau_floor": base_tau_floor,
+        "tau_tok": gate.policy.tau_tok,
+    }
+
+    for tau_sent in tau_sents:
+        for tau_floor in tau_floors:
+            gate.policy.tau_sent = float(tau_sent)
+            gate.policy.tau_floor = float(tau_floor)
+            # Keep bands soft while scoring so coverage gates dominate the search
+            gate.policy.bands = (0.25, 0.55, 0.75)
+            rows = _scores(gate, pairs)
+            best_t, best_j = 0.55, -1.0
+            for t in [i / 100 for i in range(5, 95)]:
+                tp = sum(1 for s, y in rows if y and s >= t)
+                fn = sum(1 for s, y in rows if y and s < t)
+                fp = sum(1 for s, y in rows if (not y) and s >= t)
+                tn = sum(1 for s, y in rows if (not y) and s < t)
+                tpr = tp / max(tp + fn, 1)
+                fpr = fp / max(fp + tn, 1)
+                j = tpr - fpr
+                if j > best_j:
+                    best_j, best_t = j, t
+            apply_calibration_receipt(
+                gate.policy,
+                thresholds={
+                    "tau_sent": tau_sent,
+                    "tau_floor": tau_floor,
+                    "tau_tok": gate.policy.tau_tok,
+                    "fused_pass": best_t,
+                    "fused_flag": min(best_t + 0.20, 0.90),
+                    "fused_act": min(best_t + 0.40, 0.95),
+                },
+                status="proposal",
+            )
+            f1 = _decision_f1(gate, pairs)
+            if f1 > best_f1:
+                best_f1 = f1
+                best = {
+                    "fused_pass": best_t,
+                    "fused_flag": min(best_t + 0.20, 0.90),
+                    "fused_act": min(best_t + 0.40, 0.95),
+                    "tau_sent": float(tau_sent),
+                    "tau_floor": float(tau_floor),
+                    "tau_tok": float(gate.policy.tau_tok),
+                }
+
+    # restore before caller applies the winner
+    gate.policy.tau_sent = base_tau_sent
+    gate.policy.tau_floor = base_tau_floor
+    gate.policy.bands = base_bands
+    return best
+
+
 def calibrate_labeled(
     pairs: list[tuple[EvidenceBundle, bool]],
     gate: ShineGate | None = None,
     version: str = "cal-labeled-0.1",
     *,
     apply_to_gate: bool = True,
+    fit_coverage: bool = False,
+    tau_sent_grid: list[float] | None = None,
+    tau_floor_grid: list[float] | None = None,
 ) -> CalibrationReport:
     from prismshine.policy import apply_calibration_receipt
 
     gate = gate or ShineGate.build()
+    if fit_coverage and pairs:
+        thresholds = fit_effect_thresholds(
+            pairs,
+            gate,
+            tau_sent_grid=tau_sent_grid,
+            tau_floor_grid=tau_floor_grid,
+        )
+    else:
+        rows = _scores(gate, pairs)
+        best_t, best_j = 0.55, -1.0
+        for t in [i / 100 for i in range(5, 95)]:
+            tp = sum(1 for s, y in rows if y and s >= t)
+            fn = sum(1 for s, y in rows if y and s < t)
+            fp = sum(1 for s, y in rows if (not y) and s >= t)
+            tn = sum(1 for s, y in rows if (not y) and s < t)
+            tpr = tp / max(tp + fn, 1)
+            fpr = fp / max(fp + tn, 1)
+            j = tpr - fpr
+            if j > best_j:
+                best_j, best_t = j, t
+        thresholds = {
+            "fused_pass": best_t,
+            "fused_flag": min(best_t + 0.20, 0.90),
+            "fused_act": min(best_t + 0.40, 0.95),
+            "tau_sent": gate.policy.tau_sent,
+            "tau_floor": gate.policy.tau_floor,
+            "tau_tok": gate.policy.tau_tok,
+        }
+
+    if apply_to_gate:
+        apply_calibration_receipt(
+            gate.policy, thresholds=thresholds, status="validated-labeled"
+        )
+        gate.calibration_version = version
+        gate._caps = gate._detect_capabilities()
+
     rows = _scores(gate, pairs)
     auroc = _auroc(rows)
-    # Fit simple thresholds: maximize Youden on fused score for flag band
-    best_t, best_j = 0.55, -1.0
-    for t in [i / 100 for i in range(5, 95)]:
-        tp = sum(1 for s, y in rows if y and s >= t)
-        fn = sum(1 for s, y in rows if y and s < t)
-        fp = sum(1 for s, y in rows if (not y) and s >= t)
-        tn = sum(1 for s, y in rows if (not y) and s < t)
-        tpr = tp / max(tp + fn, 1)
-        fpr = fp / max(fp + tn, 1)
-        j = tpr - fpr
-        if j > best_j:
-            best_j, best_t = j, t
     bands = gate.policy.bands
     prec: dict[str, float] = {}
     rec: dict[str, float] = {}
@@ -147,21 +252,6 @@ def calibrate_labeled(
         fn = sum(1 for p, (_, y) in zip(pred, rows, strict=True) if (not p) and y)
         prec[name] = tp / max(tp + fp, 1)
         rec[name] = tp / max(tp + fn, 1)
-    # best_t is the pass/flag boundary (Youden on fused risk score)
-    thresholds = {
-        "fused_pass": best_t,
-        "fused_flag": min(best_t + 0.20, 0.90),
-        "fused_act": min(best_t + 0.40, 0.95),
-        "tau_sent": gate.policy.tau_sent,
-        "tau_floor": gate.policy.tau_floor,
-        "tau_tok": gate.policy.tau_tok,
-    }
-    if apply_to_gate:
-        apply_calibration_receipt(
-            gate.policy, thresholds=thresholds, status="validated-labeled"
-        )
-        gate.calibration_version = version
-        gate._caps = gate._detect_capabilities()
     return CalibrationReport(
         mode="labeled",
         n_samples=len(pairs),
@@ -173,9 +263,38 @@ def calibrate_labeled(
         version=version,
         notes=[
             f"Receipt status=validated-labeled; AUROC={auroc}",
+            "fit_coverage=True searches tau_sent/tau_floor + fused bands for decision F1.",
             "Threshold matrix was proposal until this calibrate() run.",
         ],
     )
+
+
+def load_calibration_overlay(path: str | Path) -> dict[str, Any]:
+    """Load a calibrate() JSON receipt / overlay for ShineGate.build."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if "overlay" in data and isinstance(data["overlay"], dict):
+        return data["overlay"]
+    if "thresholds" in data:
+        return {
+            "calibration_version": data.get("version") or data.get("calibration_version") or "cal",
+            "thresholds": data["thresholds"],
+            "curves": data.get("curves") or {},
+        }
+    return data
+
+
+def apply_overlay_to_gate(gate: ShineGate, overlay: dict[str, Any]) -> ShineGate:
+    from prismshine.policy import apply_calibration_receipt
+
+    thresholds = overlay.get("thresholds") or {}
+    apply_calibration_receipt(
+        gate.policy, thresholds=thresholds, status="validated-labeled"
+    )
+    gate.calibration_version = str(
+        overlay.get("calibration_version") or gate.calibration_version
+    )
+    gate._caps = gate._detect_capabilities()
+    return gate
 
 
 def calibrate_synthetic(

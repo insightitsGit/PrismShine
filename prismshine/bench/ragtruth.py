@@ -204,14 +204,16 @@ def try_load_ragtruth(limit: int = 100) -> list[tuple[dict[str, Any], bool]] | N
         return None
 
     candidates = (
-        ("wandb/RAGTruth-test", "test"),
-        ("RAGTruth/RAGTruth", "test"),
-        ("explodinggradients/ragtruth", "test"),
+        ("wandb/RAGTruth-processed", "test"),
+        ("flowaicom/RAGTruth_test", "test"),
+        ("nimitkalra/RAGTruth", "test"),
     )
     ds = None
+    loaded_name = ""
     for name, split in candidates:
         try:
             ds = load_dataset(name, split=split)
+            loaded_name = name
             break
         except Exception:  # noqa: BLE001
             continue
@@ -229,18 +231,40 @@ def try_load_ragtruth(limit: int = 100) -> list[tuple[dict[str, Any], bool]] | N
             texts = [str(c.get("text") if isinstance(c, dict) else c) for c in ctx]
         else:
             texts = [str(ctx)]
-        label = (
-            row.get("hallucination")
-            or row.get("label")
-            or row.get("is_hallucination")
-            or row.get("hallucinated")
-        )
-        if isinstance(label, (list, dict)):
-            is_h = bool(label)
-        elif isinstance(label, str):
-            is_h = label.lower() in {"1", "true", "hallucination", "yes", "positive"}
+        # Prefer processed labels from wandb/RAGTruth-processed
+        processed = row.get("hallucination_labels_processed")
+        if isinstance(processed, dict):
+            is_h = bool(
+                int(processed.get("evident_conflict") or 0)
+                + int(processed.get("baseless_info") or 0)
+            )
         else:
-            is_h = bool(label)
+            label = (
+                row.get("hallucination")
+                or row.get("hallucination_labels")
+                or row.get("label")
+                or row.get("is_hallucination")
+                or row.get("hallucinated")
+            )
+            if isinstance(label, dict):
+                is_h = any(bool(v) for v in label.values())
+            elif isinstance(label, list):
+                is_h = len(label) > 0
+            elif isinstance(label, str):
+                s = label.strip()
+                low = s.lower()
+                if low in {"", "[]", "0", "false", "no", "none"}:
+                    is_h = False
+                elif low in {"1", "true", "hallucination", "yes", "positive"}:
+                    is_h = True
+                elif s.startswith("["):
+                    is_h = s not in {"[]", "[ ]"}
+                else:
+                    is_h = bool(s)
+            else:
+                is_h = bool(label)
+        # wandb context sometimes appends a trailing "output:" prompt artifact
+        texts = [t.replace("\n\noutput:", "").strip() for t in texts]
         preload = [
             {"chunk_id": f"c{j}", "text": t, "source": "retrieval"}
             for j, t in enumerate(texts)
@@ -258,7 +282,10 @@ def try_load_ragtruth(limit: int = 100) -> list[tuple[dict[str, Any], bool]] | N
                             "hop": "r",
                             "kind": "retrieval",
                             "status": "ok",
-                            "detail": {"n_chunks": len(preload)},
+                            "detail": {
+                                "n_chunks": len(preload),
+                                "dataset": loaded_name,
+                            },
                         }
                     ],
                 },

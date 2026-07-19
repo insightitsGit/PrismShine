@@ -24,6 +24,7 @@ from pathlib import Path
 import httpx
 
 HALUEVAL_QA = "https://raw.githubusercontent.com/RUCAIBox/HaluEval/main/data/qa_data.json"
+HALUEVAL_SUM = "https://raw.githubusercontent.com/RUCAIBox/HaluEval/main/data/summarization_data.json"
 WARMUP = 5  # excluded from latency stats (models pre-baked, small warmup suffices)
 SEED = 42
 
@@ -32,16 +33,38 @@ SEED = 42
 # datasets
 # ---------------------------------------------------------------------------
 
-def load_halueval(cache_dir: Path, n_rows: int) -> list[dict]:
-    cache = cache_dir / "halueval_qa.jsonl"
+def _load_jsonl(url: str, cache: Path) -> list[dict]:
     if not cache.exists():
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        print(f"downloading HaluEval QA -> {cache}")
-        with urllib.request.urlopen(HALUEVAL_QA, timeout=120) as r:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        print(f"downloading {url} -> {cache}")
+        with urllib.request.urlopen(url, timeout=120) as r:
             cache.write_bytes(r.read())
-    rows = [json.loads(line) for line in cache.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [json.loads(line) for line in cache.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def load_halueval(cache_dir: Path, n_rows: int) -> list[dict]:
+    rows = _load_jsonl(HALUEVAL_QA, cache_dir / "halueval_qa.jsonl")
     random.Random(SEED).shuffle(rows)
     return rows[:n_rows]
+
+
+def build_bsum(cache_dir: Path, n_rows: int) -> list[dict]:
+    """Summarization track: long grounded/hallucinated summaries vs a document."""
+    rows = _load_jsonl(HALUEVAL_SUM, cache_dir / "halueval_sum.jsonl")
+    random.Random(SEED).shuffle(rows)
+    samples = []
+    for i, row in enumerate(rows[:n_rows]):
+        doc = row["document"][:6000]
+        q = "Summarize the document."
+        samples.append(
+            {"id": f"bs-{i}-g", "track": "Bsum", "question": q, "context": [doc],
+             "answer": row["right_summary"], "label": "grounded"}
+        )
+        samples.append(
+            {"id": f"bs-{i}-h", "track": "Bsum", "question": q, "context": [doc],
+             "answer": row["hallucinated_summary"], "label": "hallucinated"}
+        )
+    return samples
 
 
 def build_b1(rows: list[dict]) -> list[dict]:
@@ -149,6 +172,7 @@ def run_system(name: str, url: str, samples: list[dict], out_dir: Path, timeout:
             rec = {**body, "gold": s["label"], "track": s["track"], "system": name}
             results.append(rec)
             fh.write(json.dumps(rec) + "\n")
+            fh.flush()  # progress must survive a killed run
             if (k + 1) % 25 == 0:
                 print(f"  {name}: {k + 1}/{len(samples)}")
     return results
@@ -159,6 +183,7 @@ def main() -> int:
     ap.add_argument("--targets", required=True, help="JSON file {system: base_url}")
     ap.add_argument("--n", type=int, default=100, help="HaluEval rows (x2 samples) for B1")
     ap.add_argument("--b2", type=int, default=25, help="numeric pairs for B2")
+    ap.add_argument("--sum", type=int, default=25, help="summarization pairs for Bsum")
     ap.add_argument("--ragas-limit", type=int, default=30, help="max samples for ragas (slow judge)")
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--out", default="results/run")
@@ -172,7 +197,8 @@ def main() -> int:
     rows = load_halueval(cache, args.n)
     b1 = build_b1(rows)
     b2 = build_b2(load_halueval(cache, 2000), args.b2)
-    print(f"B1: {len(b1)} samples | B2: {len(b2)} samples | systems: {list(targets)}")
+    bsum = build_bsum(cache, args.sum)
+    print(f"B1: {len(b1)} | B2: {len(b2)} | Bsum: {len(bsum)} | systems: {list(targets)}")
 
     # health checks
     for name, url in targets.items():
@@ -183,9 +209,9 @@ def main() -> int:
             print(f"health {name}: FAILED {exc}")
 
     summary: dict = {"created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                     "n_b1": len(b1), "n_b2": len(b2), "systems": {}}
+                     "n_b1": len(b1), "n_b2": len(b2), "n_bsum": len(bsum), "systems": {}}
     for name, url in targets.items():
-        for track, samples in (("B1", b1), ("B2", b2)):
+        for track, samples in (("B1", b1), ("B2", b2), ("Bsum", bsum)):
             subset = samples[: 2 * args.ragas_limit] if name.startswith("ragas") else samples
             print(f"== {name} / {track} ({len(subset)} samples) ==")
             res = run_system(f"{name}_{track}", url, subset, out_dir, args.timeout)

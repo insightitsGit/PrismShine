@@ -1,0 +1,102 @@
+{
+  "cases": [
+    {
+      "caught": true,
+      "expect": "EMPTY_RETRIEVAL",
+      "name": "EMPTY_RETRIEVAL",
+      "signatures": [
+        "EMPTY_RETRIEVAL"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "TOOL_ERROR_SWALLOWED",
+      "name": "TOOL_ERROR_SWALLOWED",
+      "signatures": [
+        "TOOL_ERROR_SWALLOWED"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "RETRIEVAL_SKIPPED_AFTER_CACHE_MISS",
+      "name": "RETRIEVAL_SKIPPED_AFTER_CACHE_MISS",
+      "signatures": [
+        "RETRIEVAL_SKIPPED_AFTER_CACHE_MISS"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "HIT_REVALIDATE_IGNORED",
+      "name": "HIT_REVALIDATE_IGNORED",
+      "signatures": [
+        "HIT_REVALIDATE_IGNORED"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "LLM_ERROR",
+      "name": "LLM_ERROR",
+      "signatures": [
+        "LLM_ERROR"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "TRACE_INCOMPLETE",
+      "name": "TRACE_INCOMPLETE",
+      "signatures": [
+        "TRACE_INCOMPLETE"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "CACHE_PREDATES_FACT_UPDATE",
+      "name": "CACHE_PREDATES_FACT_UPDATE",
+      "signatures": [
+        "CACHE_PREDATES_FACT_UPDATE"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "PARALLEL_PRELOAD_AMBIGUITY",
+      "name": "PARALLEL_PRELOAD_AMBIGUITY",
+      "signatures": [
+        "PARALLEL_PRELOAD_AMBIGUITY",
+        "PARTIAL_RETRIEVAL"
+      ]
+    },
+    {
+      "caught": true,
+      "expect": "CONFLICTING_PRELOAD_FACTS",
+      "name": "CONFLICTING_PRELOAD_FACTS",
+      "signatures": [
+        "CONFLICTING_PRELOAD_FACTS",
+        "PARTIAL_RETRIEVAL"
+      ]
+    }
+  ],
+  "competitor_baseline": {
+    "detail": "Encoder classifiers and LLM judges cannot observe ledger failures; this suite is Shine-only by construction.",
+    "status": "literature / not run"
+  },
+  "gates": {
+    "catch_rate": 1.0,
+    "catch_rate_min": 0.9,
+    "false_alarm_on_clean": false,
+    "pre_gen_model_calls": 0,
+    "tokens_avoided_cases": 1
+  },
+  "metrics": {
+    "catch_rate": 1.0,
+    "clean_decision": "pass",
+    "n_caught": 9,
+    "n_injected": 9
+  },
+  "name": "cause_side",
+  "notes": [
+    "Competitors that only see (context, question, answer) score N/A on this suite.",
+    "POSITIONING gate: >=90% injected runtime failures caught by Tier-0.",
+    "Pre-gen halt proves tokens avoided (model never called)."
+  ],
+  "passed": true
+}

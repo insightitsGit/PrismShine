@@ -1,0 +1,50 @@
+{
+  "track": "B1-calibrated",
+  "dataset": "HaluEval-QA",
+  "n_train": 100,
+  "n_test": 100,
+  "embedder": "hash-64 (local; Azure shim uses MiniLM \u2014 redeploy with PRISMSHINE_CALIBRATION)",
+  "pre_calibrate_f1_test": 0.6528,
+  "calibrated_f1_test": 0.6528,
+  "f1_lift": 0.0,
+  "thresholds": {
+    "fused_pass": 0.76,
+    "fused_flag": 0.9,
+    "fused_act": 0.95,
+    "tau_sent": 0.45,
+    "tau_floor": 0.05,
+    "tau_tok": 0.5
+  },
+  "threshold_status": "validated-labeled",
+  "calibration_version": "cal-halueval-b1-0.1",
+  "overlay": {
+    "calibration_version": "cal-halueval-b1-0.1",
+    "thresholds": {
+      "fused_pass": 0.76,
+      "fused_flag": 0.9,
+      "fused_act": 0.95,
+      "tau_sent": 0.45,
+      "tau_floor": 0.05,
+      "tau_tok": 0.5
+    },
+    "curves": {
+      "grounding.risk_coverage": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    }
+  },
+  "notes": [
+    "Calibrated row \u2014 not the default headline vs HHEM.",
+    "Fitting lives in prismshine.calibrate (library), not a bench fork.",
+    "Receipt status=validated-labeled; AUROC=0.46567643516659973",
+    "fit_coverage=True searches tau_sent/tau_floor + fused bands for decision F1.",
+    "Threshold matrix was proposal until this calibrate() run."
+  ]
+}

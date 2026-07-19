@@ -15,9 +15,11 @@ from pydantic import BaseModel
 
 from prismshine.evidence.builder import bundle_from_dict
 from prismshine.gate import ShineGate
+from prismshine.grounding.splitter import split_sentences
 
 MODEL_NAME = os.environ.get("SHINE_EMBEDDER", "sentence-transformers/all-MiniLM-L6-v2")
 PROFILE = os.environ.get("SHINE_PROFILE", "default")
+CALIBRATION = os.environ.get("PRISMSHINE_CALIBRATION")
 
 _st_model = None
 
@@ -32,7 +34,9 @@ def _embedder(texts: list[str]) -> np.ndarray:
 
 
 app = FastAPI()
-gate = ShineGate.build(profile=PROFILE, embedder=_embedder)
+gate = ShineGate.build(
+    profile=PROFILE, embedder=_embedder, calibration_path=CALIBRATION
+)
 # warm the encoder so first-sample latency is not model load time
 _embedder(["warmup sentence"])
 
@@ -52,6 +56,8 @@ def health() -> dict:
         "status": "ok",
         "system": "prismshine-fast",
         "profile": PROFILE,
+        "calibration_version": gate.calibration_version,
+        "threshold_status": gate.policy.threshold_status,
         "coverage_mode": caps["coverage_mode"],
         "span_backend": caps["span_backend"],
         "tiers": caps["tiers"],
@@ -65,9 +71,12 @@ def evaluate(req: EvalRequest) -> dict:
         "run_id": req.id,
         "question": req.question,
         "answer": req.answer,
+        # Sentence-granular chunks: short answers must be able to match a single
+        # supporting sentence, not fight the cosine of a whole paragraph.
         "preload": [
-            {"chunk_id": f"c{i}", "text": c, "source": "retrieval"}
+            {"chunk_id": f"c{i}-{j}", "text": sent, "source": "retrieval"}
             for i, c in enumerate(req.context)
+            for j, sent in enumerate(split_sentences(c) or [c])
         ],
         # Content-only track: synthesize a healthy retrieval step (no ledger available).
         "trace": [

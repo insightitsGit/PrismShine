@@ -1,0 +1,247 @@
+{
+  "created_at": "2026-07-19T10:08:30.291715+00:00",
+  "passed": true,
+  "suites": {
+    "grounding": {
+      "cases": [
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "num_good_0"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.3383333333333333,
+          "gate": "T3_SPANS_CONFIRMED",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "num_bad_0"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "num_good_1"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.3383333333333333,
+          "gate": "T3_SPANS_CONFIRMED",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "num_bad_1"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "num_good_2"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.3383333333333333,
+          "gate": "T3_SPANS_CONFIRMED",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "num_bad_2"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "num_good_3"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.3383333333333333,
+          "gate": "T3_SPANS_CONFIRMED",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "num_bad_3"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "num_good_4"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.3383333333333333,
+          "gate": "T3_SPANS_CONFIRMED",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "num_bad_4"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.25317460317460316,
+          "gate": "FUSION_GRAY",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "json_bad"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.75,
+          "gate": "T2_COVERAGE_COLLAPSE",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "hard_neg_bad"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "hard_neg_good"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.355,
+          "gate": "FUSION_GRAY",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "hard_uns_bad"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.10416666666666666,
+          "gate": "T1_UNMATCHED_HARD_FACT",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "hard_ent_bad"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "hard_ent_good"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.75,
+          "gate": "T2_COVERAGE_COLLAPSE",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "hard_fin_bad"
+        },
+        {
+          "decision": "flag",
+          "fused_score": 0.75,
+          "gate": "T2_COVERAGE_COLLAPSE",
+          "is_hallucination": true,
+          "predicted": true,
+          "run_id": "hard_leg_bad"
+        },
+        {
+          "decision": "pass",
+          "fused_score": 0.0,
+          "gate": "CLEAN_FAST_PATH",
+          "is_hallucination": false,
+          "predicted": false,
+          "run_id": "hard_ok_multi"
+        }
+      ],
+      "competitor_baseline": {
+        "detail": "External RAGAS/DeepEval/LettuceDetect Hub runs are not bundled.",
+        "shine_f1": 1.0,
+        "span_backend": "lexical",
+        "span_f1": 0.9,
+        "status": "in-process span baseline only"
+      },
+      "gates": {
+        "calibrate_lift_met": true,
+        "f1_delta_vs_span": 0.1,
+        "hard_negation_caught": true,
+        "synthetic_f1": 1.0,
+        "synthetic_f1_min": 0.85,
+        "within_5pts_of_span_baseline": true
+      },
+      "metrics": {
+        "auroc": 1.0,
+        "domain_calibrate": {
+          "bands_after": [
+            0.05,
+            0.25,
+            0.45
+          ],
+          "calibrated_auroc": 1.0,
+          "calibrated_f1": 1.0,
+          "f1_lift": 0.0,
+          "lift_gate_min": 0.1,
+          "lift_met": true,
+          "notes": [
+            "F1 lift measured on synthetic negatives (band fit); labeled packs preferred for claims.",
+            "Gate: +0.10 decision-F1 or calibrated F1 >= 0.90."
+          ],
+          "pre_calibrate_auroc": 1.0,
+          "pre_calibrate_f1": 1.0,
+          "profile": "clinical",
+          "threshold_status": "validated-labeled",
+          "version": "cal-clinical-0.1"
+        },
+        "n_pairs": 19,
+        "ragtruth": {
+          "accuracy": 0.27,
+          "auroc": 0.5286656519533232,
+          "f1": 0.3866,
+          "fn": 4,
+          "fp": 69,
+          "n": 100,
+          "precision": 0.25,
+          "recall": 0.8519,
+          "status": "ran",
+          "tn": 4,
+          "tp": 23
+        },
+        "span_baseline": {
+          "accuracy": 0.8947,
+          "artifact_id": "lettucedetect-onnx-v1+lexical",
+          "backend": "lexical",
+          "f1": 0.9,
+          "fn": 2,
+          "fp": 0,
+          "note": "In-process SpanClassifier; pin via PRISMSHINE_SPAN_ONNX for onnx",
+          "precision": 1.0,
+          "recall": 0.8182,
+          "tn": 8,
+          "tp": 9
+        },
+        "synthetic": {
+          "accuracy": 1.0,
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "tn": 8,
+          "tp": 11
+        }
+      },
+      "name": "grounding",
+      "notes": [
+        "Includes hard_effect_pairs (negation/entity/finance/legal) offline.",
+        "Set PRISMSHINE_BENCH_FULL=1 + datasets for real RAGTruth subset.",
+        "Pin ONNX: PRISMSHINE_SPAN_ONNX (+ optional PRISMSHINE_SPAN_TOKENIZER).",
+        "Domain calibrate lift is a separate receipt row under domain_calibrate."
+      ],
+      "passed": true
+    }
+  },
+  "version": "0.1.0"
+}
