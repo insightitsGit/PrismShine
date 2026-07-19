@@ -1,0 +1,2 @@
+{"id": "b2-7-g", "risk": 0.1639719009399414, "label": "grounded", "decision": "pass", "latency_ms": 169.97976300262962, "llm_calls": 0, "cost_usd": 0.0, "gold": "grounded", "track": "B2", "system": "hhem_B2"}
+{"id": "b2-7-h", "risk": 0.9734436888247728, "label": "hallucinated", "decision": "flag", "latency_ms": 176.1336460003804, "llm_calls": 0, "cost_usd": 0.0, "gold": "hallucinated", "track": "B2", "system": "hhem_B2"}
