@@ -37,6 +37,7 @@ Both sides fuse into one auditable **ShineVerdict** with a named resolution gate
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision records |
 | [`docs/UPSTREAM.md`](docs/UPSTREAM.md) | Coordinated version bumps needed in sibling libraries (prismlib, ChorusGraph, PrismCortex, prismlang) |
 | [`docs/POSITIONING.md`](docs/POSITIONING.md) | Market comparison, standing, honest weaknesses, and the benchmark gates required before claims go public |
+| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Receipt-backed suites: cause-side, grounding, latency/cost, consistency |
 | [`handoffs/`](handoffs/) | Self-contained work orders, one per sibling repo, for implementing the upstream changes (report-back format for verification) |
 | [`kb/README.md`](kb/README.md) | Knowledge base of the 12 sibling Insight libraries (verified from source) |
 
@@ -98,6 +99,7 @@ print(gate.capabilities())
 prismshine capabilities
 prismshine verify bundle.json --profile default
 prismshine calibrate ./samples --mode synthetic
+prismshine bench --suite all --report benchmarks/reports
 ```
 
 ## Profiles & handbook packs

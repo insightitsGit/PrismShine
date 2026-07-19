@@ -1,4 +1,4 @@
-"""Console script: prismshine capabilities | verify | calibrate."""
+"""Console script: prismshine capabilities | verify | calibrate | bench."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from prismshine import __version__
+from prismshine.bench.runner import ALL_SUITES, run_bench
 from prismshine.calibrate import calibrate_dir
 from prismshine.evidence.builder import bundle_from_dict
 from prismshine.gate import ShineGate
@@ -63,6 +64,17 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bench(args: argparse.Namespace) -> int:
+    suites = [args.suite] if args.suite != "all" else list(ALL_SUITES)
+    report_dir = Path(args.report)
+    report = run_bench(suites, report_dir=report_dir)
+    # Windows consoles may be cp1252 — keep stdout ASCII-safe
+    text = report.to_markdown().encode("ascii", errors="replace").decode("ascii")
+    print(text)
+    print(f"Wrote receipts to {report_dir.resolve()}")
+    return 0 if report.passed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="prismshine",
@@ -92,6 +104,23 @@ def main(argv: list[str] | None = None) -> int:
     p_cal.add_argument("--strictness", default="standard")
     p_cal.add_argument("--out", default=None, help="Write report JSON to path")
     p_cal.set_defaults(func=cmd_calibrate)
+
+    p_bench = sub.add_parser(
+        "bench",
+        help="Run receipt-backed benchmark suites (see docs/BENCHMARKS.md)",
+    )
+    p_bench.add_argument(
+        "--suite",
+        default="all",
+        choices=["all", "cause", "grounding", "latency", "consistency"],
+        help="Suite to run (default: all)",
+    )
+    p_bench.add_argument(
+        "--report",
+        default="benchmarks/reports",
+        help="Directory for JSON/MD receipts",
+    )
+    p_bench.set_defaults(func=cmd_bench)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

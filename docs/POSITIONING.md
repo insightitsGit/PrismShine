@@ -1,6 +1,6 @@
 # PrismShine — Market Positioning & Targets
 
-Snapshot of the anti-hallucination market (Jul 2026) and where PrismShine stands if implemented per `DESIGN.md`. Keep this current as the market moves; claims below marked **[target]** are design goals that must be proven by the benchmark suite before being used publicly (family rule: claims ship with receipts).
+Snapshot of the anti-hallucination market (Jul 2026) and where PrismShine stands if implemented per `DESIGN.md`. Keep this current as the market moves; claims below marked **[target]** are design goals that must be proven by the benchmark suite before being used publicly (family rule: claims ship with receipts — see [`docs/BENCHMARKS.md`](BENCHMARKS.md)).
 
 ## Competitive landscape
 
@@ -19,7 +19,7 @@ Market context: a 2026 public benchmark (PlaceboBench) measured six major tools 
 
 ## Standing (if implemented cleanly)
 
-- **Category-creator:** only product doing runtime-integrated hallucination *prevention* (cause-side forensics + pre-generation halt + consistency contract). Structural moat — competitors must become runtimes to copy it.
+- **Category-creator:** only product doing runtime-integrated hallucination *prevention* (cause-side forensics + pre-generation halt + consistency contract). Structural moat — competitors must become runtimes (or adopt the same ledger contract) to copy it.
 - **Cost leader:** majority path is Tier 0–2, CPU, zero network, zero marginal cost; pre-gen halting *saves* generation spend. No competitor can claim verification that pays for itself.
 - **Best-in-class auditability:** named gates, evidence pointers, content-addressed replay — the regulated-vertical (legal/clinical/finance) differentiator; strongest when sold with PrismGuard + PrismCortex as an auditable input→memory→output chain.
 - **Peer-competitive raw detection:** Tier-3 adoption = LettuceDetect-class parity at v0, with a data-advantaged path to lead (ledger traces with Tier-0-labeled causes are proprietary training data — ADR-8).
@@ -27,17 +27,19 @@ Market context: a 2026 public benchmark (PlaceboBench) measured six major tools 
 ## Honest weaknesses (do not paper over)
 
 1. Raw detection accuracy will not lead at v0; LLM-agent products win cue-less contradictions unless Tier 4 is enabled. Counter: Tier-1 beats pure NLI on fabricated numbers; contradiction cues route hard cases to the right tier. Never market "highest accuracy" without benchmark receipts.
-2. The full moat lights up inside ChorusGraph; standalone/LangGraph mode is "very good grounding checker with partial forensics" — competitive, not category-defining. (Strategically: PrismShine is a ChorusGraph adoption pull.)
+2. The full moat requires **wiring** (trace / ledger steps + pre/post hooks via `prismshine.wiring` or ChorusGraph plugins). Without a ledger, Shine is a strong grounding checker — competitive, not category-defining. Richest out-of-the-box inside ChorusGraph; LangGraph/custom achieve parity when authors emit the same evidence.
 3. Distribution: eval platforms own integration mindshare; beachhead = Insight ecosystem + regulated verticals.
 4. English-only at v0; multilingual is post-v0.
 
 ## Targets to claim the standing (benchmark gates before launch)
 
-| Target | Gate |
-|---|---|
-| Fast path p50 < 25 ms (T0+T1+T2) | latency harness (DESIGN §9) |
-| Example-level detection within 5 F1 pts of encoder SotA on RAGTruth | Tier-2+3 eval |
-| ≥ 90% of injected runtime failures caught by Tier-0 signatures | integration suite with injected failures |
-| Judge escalation ≤ 10% of traffic on default profile | traffic replay bench |
-| Zero stale-cache serves after correction in the consistency-contract test matrix | dual-rail tests (prevention off → detection must still catch 100%) |
-| Domain calibration lifts AUROC ≥ 0.10 over generic defaults on each domain pack | calibration harness report |
+| Target | Gate | Receipt |
+|---|---|---|
+| Fast path p50 < 25 ms (T0+T1+T2) local | latency harness soft CI `<100ms`; local target `<25ms` | `benchmarks/reports/latency_cost.json` via `prismshine bench --suite latency` |
+| Example-level detection within 5 F1 pts of encoder SotA on RAGTruth | Tier-2+3 eval (+ optional `PRISMSHINE_BENCH_FULL=1`) | `benchmarks/reports/grounding.json` |
+| ≥ 90% of injected runtime failures caught by Tier-0 signatures | cause-side injection suite | `benchmarks/reports/cause_side.json` |
+| Judge escalation ≤ 10% of traffic on default profile | traffic replay / mixed corpus proxy | `benchmarks/reports/latency_cost.json` (`judge_escalation_rate`) |
+| Zero stale-cache serves after correction in the consistency-contract test matrix | dual-rail (prevention off → detection 100%) | `benchmarks/reports/consistency.json` |
+| Domain calibration lifts AUROC ≥ 0.10 over generic defaults on each domain pack | `prismshine calibrate` report | calibration overlay JSON (`threshold_status` leaves `proposal`) |
+
+Run all receipts: `prismshine bench --suite all --report benchmarks/reports` (details in [`docs/BENCHMARKS.md`](BENCHMARKS.md)).

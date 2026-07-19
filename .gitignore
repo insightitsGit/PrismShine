@@ -46,3 +46,6 @@ Thumbs.db
 
 # Cursor
 .cursor/
+
+# Generated benchmark receipts (re-run via `prismshine bench`)
+benchmarks/reports/

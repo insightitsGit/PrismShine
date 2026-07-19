@@ -13,7 +13,7 @@
 | BYO runtime (no ChorusGraph) | `test_byo_runtime.py` |
 | README examples | `test_readme_examples.py` |
 | CLI / cache / calibrate | `test_cache_audit_cli.py`, `test_calibrate_spans_judge.py` |
-| Benchmarks | `benchmarks/` |
+| Benchmarks | `benchmarks/` (`test_cause_suite`, `test_grounding_suite`, `test_latency_harness`, `test_consistency_suite`) + CLI `prismshine bench` |
 
 ```bash
 pip install -e ".[dev]"
