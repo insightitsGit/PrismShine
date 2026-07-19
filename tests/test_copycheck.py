@@ -61,3 +61,24 @@ def test_arithmetic_sum_derived():
 def test_date_normalization():
     facts = extract_facts("Signed on January 5, 2024.")
     assert any(f.kind == "date" and f.normalized == "2024-01-05" for f in facts)
+
+
+def test_single_token_place_mismatch():
+    """Asia vs Europe must surface as unmatched entities (not silent CLEAN_FAST_PATH)."""
+    facts = extract_facts("Demand grew in Asia this quarter.")
+    assert any(f.kind == "entity" and f.normalized == "asia" for f in facts)
+    b, _ = bundle_from_dict(
+        {
+            "question": "Where was demand?",
+            "answer": "The CEO cited strong demand in Asia this quarter.",
+            "preload": [
+                {
+                    "chunk_id": "1",
+                    "text": "The CEO cited strong demand in Europe this quarter.",
+                }
+            ],
+        }
+    )
+    r = copycheck(b)
+    assert any(f.normalized == "asia" for f in r.unmatched)
+    assert r.unmatched_ratio > 0.0

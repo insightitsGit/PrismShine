@@ -188,7 +188,8 @@ def run_grounding_suite(*, gate: ShineGate | None = None) -> SuiteResult:
     neg_cases = [c for c in cases if c.get("run_id") == "hard_neg_bad"]
     neg_ok = all(c["predicted"] for c in neg_cases) if neg_cases else True
 
-    passed = f1_gate and vs_sota and neg_ok
+    lift_ok = bool(cal.get("lift_met"))
+    passed = f1_gate and vs_sota and neg_ok and lift_ok
 
     return SuiteResult(
         name="grounding",
@@ -199,7 +200,7 @@ def run_grounding_suite(*, gate: ShineGate | None = None) -> SuiteResult:
             "within_5pts_of_span_baseline": vs_sota,
             "f1_delta_vs_span": round(delta, 4),
             "hard_negation_caught": neg_ok,
-            "calibrate_lift_met": cal.get("lift_met"),
+            "calibrate_lift_met": lift_ok,
         },
         metrics={
             "synthetic": conf.as_dict(),
