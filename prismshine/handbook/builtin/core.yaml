@@ -1,0 +1,235 @@
+handbook_version: "0.1.0"
+signatures:
+  - id: EMPTY_RETRIEVAL
+    title: "Retrieval hop returned zero chunks"
+    severity: fatal
+    scope: preload
+    detector: retrieval.empty
+    params:
+      min_chunks: 1
+      applies_to_sections: must_ground
+    signal_value: 1.0
+    advice: "Retrieval hop '{hop}' returned {n} chunks for a must-ground section. Halt or repair retrieval before generation."
+
+  - id: LOW_RELEVANCE_RETRIEVAL
+    title: "All retrieval scores below profile floor"
+    severity: error
+    scope: preload
+    detector: retrieval.low_relevance
+    params:
+      min_score: 0.55
+      score_key: constructive_score
+    signal_value: 0.85
+    advice: "Retrieval hop '{hop}' max {score_key}={max_score:.3f} below floor {min_score}. Chunks exist but none are on-topic."
+
+  - id: RETRIEVAL_ERROR
+    title: "Retrieval hop errored or timed out"
+    severity: fatal
+    scope: preload
+    detector: retrieval.error
+    params: {}
+    signal_value: 1.0
+    advice: "Retrieval hop '{hop}' status={status}. Repair the retrieval path before generation."
+
+  - id: CATEGORY_MISMATCH
+    title: "Retrieved category disagrees with query-inferred category"
+    severity: warning
+    scope: preload
+    detector: retrieval.category_mismatch
+    params: {}
+    signal_value: 0.4
+    advice: "Retrieval hop '{hop}' rule_chain category '{chunk_cat}' disagrees with query category '{query_cat}'."
+
+  - id: PARTIAL_RETRIEVAL
+    title: "Fewer chunks than requested"
+    severity: warning
+    scope: preload
+    detector: retrieval.partial
+    params:
+      min_chunks_expected: 3
+    signal_value: 0.35
+    advice: "Retrieval hop '{hop}' returned {n} chunks (requested top_k={top_k}, min_expected={min_chunks_expected})."
+
+  - id: TOOL_ERROR_SWALLOWED
+    title: "Tool error swallowed before generation"
+    severity: fatal
+    scope: preload
+    detector: tools.error_swallowed
+    params: {}
+    signal_value: 1.0
+    advice: "Tool hop '{hop}' status=error but node_state has no error marker and generation proceeded. Surface the tool failure."
+
+  - id: TOOL_EMPTY_RESULT
+    title: "Tool returned empty payload for must-ground section"
+    severity: error
+    scope: preload
+    detector: tools.empty_result
+    params:
+      applies_to_sections: must_ground
+    signal_value: 0.8
+    advice: "Tool hop '{hop}' produced empty/null payload consumed by a must-ground section."
+
+  - id: TOOL_TIMEOUT
+    title: "Tool call timed out"
+    severity: error
+    scope: preload
+    detector: tools.timeout
+    params: {}
+    signal_value: 0.75
+    advice: "Tool hop '{hop}' status=timeout. Retry or degrade with an honest disclosure."
+
+  - id: TOOL_SCHEMA_DRIFT
+    title: "Tool payload missing keys the consumer read"
+    severity: warning
+    scope: preload
+    detector: tools.schema_drift
+    params: {}
+    signal_value: 0.45
+    advice: "State key '{key}' accessed by consumer was absent/None after tool hop '{hop}'."
+
+  - id: CONTEXT_TRUNCATED
+    title: "Assembled preload exceeded budget and was truncated"
+    severity: error
+    scope: preload
+    detector: context.truncated
+    params: {}
+    signal_value: 0.8
+    advice: "Context budget exceeded (used={used}, limit={limit}); truncated_tail={truncated_tail}. Critical evidence may have been cut."
+
+  - id: MISSING_STATE_KEY
+    title: "Generator referenced an empty/absent state key"
+    severity: error
+    scope: preload
+    detector: context.missing_state_key
+    params: {}
+    signal_value: 0.85
+    advice: "Generator prompt referenced state key '{key}' that was empty/absent at generation time."
+
+  - id: PRELOAD_DUPLICATION
+    title: "Near-duplicate chunks wasted context budget"
+    severity: info
+    scope: preload
+    detector: context.duplication
+    params:
+      jaccard_threshold: 0.9
+    signal_value: 0.15
+    advice: "Near-duplicate preload chunks {a} and {b} (jaccard={score:.2f}) wasted context budget."
+
+  - id: LOW_FIDELITY_SPACE
+    title: "Coverage forced into JL-64 space"
+    severity: info
+    scope: answer
+    detector: context.low_fidelity_space
+    params: {}
+    signal_value: 0.2
+    advice: "Chunk '{chunk_id}' only has jl-64 vectors; stricter τ_sent applied. Prefer raw-384 for verification."
+
+  - id: ENCODER_VERSION_MISMATCH
+    title: "Preload and answer vectors from different encoder artifacts"
+    severity: error
+    scope: answer
+    detector: context.encoder_mismatch
+    params: {}
+    signal_value: 0.7
+    advice: "Chunk '{chunk_id}' vector_space artifact '{chunk_artifact}' differs from answer encoder '{answer_artifact}'. Re-encode or degrade coverage."
+
+  - id: STALE_CACHE_REUSE
+    title: "Cache hit predates newer source partition version"
+    severity: error
+    scope: preload
+    detector: cache.stale_reuse
+    params: {}
+    signal_value: 0.85
+    advice: "Cache hop '{hop}' HIT_REUSE entry partition_version={entry_version} < current={current_version}."
+
+  - id: CACHE_PREDATES_FACT_UPDATE
+    title: "Cache hit predates a related fact correction"
+    severity: error
+    scope: preload
+    detector: cache.predates_fact_update
+    params:
+      similarity_threshold: 0.55
+    signal_value: 0.9
+    advice: "Cache hop '{hop}' entry created_at={created_at} predates correction valid_from={valid_from} for subject '{subject}'."
+
+  - id: MARGINAL_CACHE_HIT
+    title: "Cache reuse score within epsilon of threshold"
+    severity: warning
+    scope: preload
+    detector: cache.marginal_hit
+    params:
+      epsilon: 0.01
+    signal_value: 0.4
+    advice: "Cache hop '{hop}' HIT_REUSE verify_score={score:.3f} within {epsilon} of threshold={threshold}."
+
+  - id: CACHE_CONTEXT_MISUSE
+    title: "Cache-as-context was sole support for a Tier-1 fact"
+    severity: warning
+    scope: answer
+    detector: cache.context_misuse
+    params: {}
+    signal_value: 0.5
+    advice: "HIT_AS_CONTEXT entry from hop '{hop}' was the only preload support for fact '{fact}'."
+
+  - id: MEMORY_CONFLICT_SERVED
+    title: "Recall subgraph contained a conflicted fact"
+    severity: error
+    scope: preload
+    detector: memory.conflict_served
+    params: {}
+    signal_value: 0.85
+    advice: "Memory recall served conflicted fact for subject '{subject}' relation '{relation}'. Ask the user to clarify both values."
+
+  - id: STAGED_FACT_SERVED
+    title: "Answer support traces to a staged fact"
+    severity: warning
+    scope: preload
+    detector: memory.staged_fact
+    params: {}
+    signal_value: 0.45
+    advice: "Staged (unconsolidated) fact for subject '{subject}' was served. Prefer consolidated facts or confirm with the user."
+
+  - id: EXPIRED_FACT_SERVED
+    title: "Supporting fact valid_to is closed at query time"
+    severity: error
+    scope: preload
+    detector: memory.expired_fact
+    params: {}
+    signal_value: 0.8
+    advice: "Fact for subject '{subject}' has valid_to={valid_to} closed at query time {query_time}."
+
+  - id: CONFLICTING_PRELOAD_FACTS
+    title: "Preload asserts incompatible values for exclusive relation"
+    severity: error
+    scope: preload
+    detector: memory.conflicting_preload
+    params: {}
+    signal_value: 0.9
+    advice: "Conflicting preload facts for subject '{subject}' relation '{relation}': '{value_a}' vs '{value_b}'. Ask a clarifying question naming both sources."
+
+  - id: GUARD_GRAY_INPUT
+    title: "PrismGuard passed input in the gray zone"
+    severity: warning
+    scope: run
+    detector: guardrun.gray_input
+    params: {}
+    signal_value: 0.35
+    advice: "PrismGuard input verdict was gray (gate={guard_gate}). Raising output strictness for this run."
+
+  - id: HOP_BUDGET_EXHAUSTED
+    title: "Run hit hop/recursion limit before planned retrieval"
+    severity: warning
+    scope: run
+    detector: guardrun.hop_budget
+    params: {}
+    signal_value: 0.4
+    advice: "Run hit hop budget (used={used}, limit={limit}) before completing planned retrieval hops."
+
+  - id: ANTI_THRASH_TRIGGERED
+    title: "ReAct stop-on-repeated-action fired"
+    severity: info
+    scope: run
+    detector: guardrun.anti_thrash
+    params: {}
+    signal_value: 0.2
+    advice: "Anti-thrash triggered on hop '{hop}' (repeated action '{action}'). Agent may have answered without the data it was looping for."

@@ -1,7 +1,5 @@
-"""Tier-0 forensics engine: run Handbook signature detectors over an EvidenceBundle.
+"""Tier-0 forensics engine and detectors."""
 
-Planned modules:
-    engine.py     — evaluate all bound signatures, produce SignatureHit signals
-    detectors/    — pure detector functions by family:
-                    retrieval.py, tools.py, context.py, cache.py, memory.py, run.py
-"""
+from prismshine.forensics.engine import ForensicsResult, dormant_families, run_forensics
+
+__all__ = ["ForensicsResult", "run_forensics", "dormant_families"]

@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prismshine"
-version = "0.0.1"
+version = "0.1.0"
 description = "Anti-hallucination verdict engine for the Insight agent stack: trace forensics + grounding verification in one auditable gate."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Insight IT Solutions LLC", email = "insightits.info@gmail.com" }]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.11",
@@ -42,8 +42,24 @@ Homepage = "https://github.com/insightitsGit/PrismShine"
 [tool.hatch.build.targets.wheel]
 packages = ["prismshine"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"prismshine/handbook/builtin/core.yaml" = "prismshine/handbook/builtin/core.yaml"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "benchmark: latency / quality harness (soft budgets)",
+]
+
+[tool.coverage.run]
+source = ["prismshine"]
+omit = ["prismshine/integrations/*"]
 
 [tool.coverage.report]
 fail_under = 80
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

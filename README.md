@@ -53,6 +53,44 @@ User query ──► PrismGuard (input firewall)
                                     (gate + signatures + spans, ledger-attached)
 ```
 
+## Install
+
+```bash
+pip install -e ".[dev]"
+# optional extras: coverage (prismlang), spans, chorusgraph, langgraph, guard, judge-openai, judge-gemini
+```
+
+## Quick start
+
+```python
+from prismshine import EvidenceBundle, PreloadChunk, ShineGate
+
+gate = ShineGate.build(profile="default")
+bundle = EvidenceBundle(
+    run_id="demo",
+    question="What was revenue?",
+    answer="Revenue was $1000 in Q1.",
+    preload=[
+        PreloadChunk(
+            chunk_id="c1",
+            text="Revenue was $1000 in Q1.",
+            source="retrieval",
+        )
+    ],
+)
+verdict = gate.verify(bundle)
+print(verdict.decision, verdict.resolution_gate, verdict.evidence_hash)
+print(gate.capabilities())
+```
+
+## CLI
+
+```bash
+prismshine capabilities
+prismshine verify bundle.json --profile default
+prismshine calibrate ./samples --mode synthetic
+```
+
 ## Status
 
-Design complete; **all upstream sibling releases shipped and verified** (prismlang 0.1.2, prismlib 0.5.0, prismlib-plus 0.8.0, prismcortex 0.3.0, chorusgraph 1.3.0 — see `docs/UPSTREAM.md` for the verification record). Next step: PrismShine implementation, targeting the native sibling APIs — remaining open questions in `docs/DESIGN.md` §13.
+Implementation targeting **0.1.0**. Upstream siblings shipped and verified (prismlang 0.1.2, prismlib 0.5.0, prismlib-plus 0.8.0, prismcortex 0.3.0, chorusgraph 1.3.0 — see `docs/UPSTREAM.md`). Design authority: `docs/DESIGN.md`.

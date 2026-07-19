@@ -1,15 +1,18 @@
 # PrismShine tests
 
-Testing strategy: docs/DESIGN.md §11.
+| Suite | Location |
+|---|---|
+| Models / hash / builder | `test_models.py` |
+| Import purity | `test_import_purity.py` |
+| Handbook detectors | `forensics/test_detectors.py` |
+| Copy-check / coverage / fusion | `test_copycheck.py`, `test_coverage.py`, `test_fusion_*.py` |
+| Golden + degradation | `test_golden_verdicts.py`, `test_degradation_matrix.py` |
+| Integrations (unit) | `test_integrations_unit.py` |
+| README examples | `test_readme_examples.py` |
+| CLI / cache / calibrate | `test_cache_audit_cli.py`, `test_calibrate_spans_judge.py` |
+| Benchmarks | `benchmarks/` |
 
-Planned layout:
-
-- `fixtures/bundles/` — canonical EvidenceBundle fixtures: one healthy baseline plus one firing + one non-firing fixture per Handbook signature (HANDBOOK.md §4 rule 1)
-- `test_handbook_*.py` — per-detector-family signature tests
-- `test_copycheck.py` — fact extraction/normalization table tests + arithmetic-closure cases (derived figures must not flag)
-- `test_coverage.py` — vector coverage math (incl. JL-fallback, resonance mode, and composite support for cross-chunk synthesis)
-- `test_contradiction.py` — negation-asymmetry/opposite-verb cases: contradicted-but-similar sentences must be promoted to Tier 3, near-identical grounded pairs must NOT fire
-- `test_fusion.py` — weight/band/gate-naming tests
-- `test_golden_verdicts.py` — bundle -> ShineVerdict snapshot determinism
-- `test_capabilities.py` — degradation matrix (DESIGN §8.2): for each absent optional dependency, gate builds, verdicts record the degraded mode, gray zones resolve to flag (never pass), user-supplied Embedder/Judge substitution works
-- `test_integration_chorusgraph.py` — demo graph with injected failures
+```bash
+pip install -e ".[dev]"
+pytest --cov=prismshine
+```

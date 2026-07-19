@@ -1,8 +1,5 @@
-"""EvidenceBundle construction: builders, validation, and runtime adapters.
+"""Evidence bundle construction and runtime adapters."""
 
-Planned modules (docs/DESIGN.md §7):
-    builder.py            — EvidenceBundle builders/validators
-    adapters/chorusgraph.py — Route Ledger + node state -> EvidenceBundle (vectors reused)
-    adapters/generic.py     — plain dict -> EvidenceBundle (standalone mode)
-    adapters/langgraph.py   — LangGraph state -> EvidenceBundle
-"""
+from prismshine.evidence.builder import bundle_from_dict, capability_feedback
+
+__all__ = ["bundle_from_dict", "capability_feedback"]

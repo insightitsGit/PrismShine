@@ -1,10 +1,6 @@
-"""Handbook: declarative failure-signature catalog (YAML) + schema + loader.
+"""Handbook schema and loader."""
 
-Signatures are data, detectors are code (docs/DECISIONS.md ADR-5).
-Schema and initial catalog: docs/HANDBOOK.md.
+from prismshine.handbook.loader import load_handbook
+from prismshine.handbook.schema import Handbook, SignatureDef
 
-Planned modules:
-    schema.py   — signature pydantic schema
-    loader.py   — YAML load / merge (builtin -> domain pack -> tenant) / version pinning
-    builtin/    — core.yaml (+ licensed domain packs: clinical, finance, legal)
-"""
+__all__ = ["Handbook", "SignatureDef", "load_handbook"]
