@@ -1,0 +1,5 @@
+# Cached datasets (tens of MB, re-downloaded on demand) and raw per-sample output.
+# Durable receipts are copied to benchmarks/progress/<date>_<name>/ instead.
+data/
+results/
+targets*.json

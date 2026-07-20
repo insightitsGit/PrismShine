@@ -16,6 +16,7 @@ import os
 # Candidate hubs (first successful ONNX+tokenizer wins). LettuceDetect-class.
 # Pin via PRISMSHINE_SPAN_MODEL / PRISMSHINE_SPAN_ONNX for CI reproducibility (P3).
 DEFAULT_MODEL_CANDIDATES = (
+    "KRLabsOrg/lettucedect-base-modernbert-en-v1",
     "Kriso/lettuce-detect-base",
     "lettucedetect/lettucedetect-base-modernbert",
 )

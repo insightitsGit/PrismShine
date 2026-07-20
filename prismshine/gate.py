@@ -22,7 +22,7 @@ from prismshine.encoder import Embedder, SharedEncoder
 from prismshine.forensics.engine import run_forensics
 from prismshine.fusion import fuse
 from prismshine.grounding.copycheck import copycheck
-from prismshine.grounding.coverage import coverage_check
+from prismshine.grounding.coverage import containment_support, coverage_check
 from prismshine.grounding.judge import EscalationBudget, Judge, build_judge
 from prismshine.grounding.spans import SpanClassifier
 from prismshine.grounding.splitter import split_sentences
@@ -389,7 +389,10 @@ class ShineGate:
         # deterministic evidence of fabrication; cosine coverage is number-blind
         # (DESIGN §5.2), so these floor the verdict at `flag` and force Tier 3.
         hard_unmatched = [
-            f for f in cc.unmatched if f.kind in {"number", "currency", "id"}
+            f
+            for f in cc.unmatched
+            if f.kind in {"number", "currency", "id"}
+            or (f.kind == "entity" and len(f.normalized.split()) >= 2)
         ]
 
         # --- Tier 2 ---
@@ -410,14 +413,25 @@ class ShineGate:
         spans.extend(cov.uncovered_spans)
         spans.extend([c.span for c in cov.contradiction_cues])
 
-        # Fast path: Tier0 clean + Tier1 zero unmatched + high coverage, no cues
+        # Fast path: only for extractive / no-novel-PN answers (DESIGN §3 majority path).
+        # Fluent paraphrases with novel proper nouns must not skip Tier 3.
         tier0_clean = not any(h.severity in {"fatal", "error"} for h in forensics.hits)
         coverage_pass_threshold = max(0.75, 1.0 - policy.bands[0])
+        preload_texts = [c.text for c in bundle.preload if c.text]
+        answer_sents = split_sentences(bundle.answer) or ([bundle.answer] if bundle.answer else [])
+        extractive = bool(answer_sents) and all(
+            containment_support(s, preload_texts) >= 1.0 for s in answer_sents if s.strip()
+        )
+        novel_multiword = any(
+            f.kind == "entity" and len(f.normalized.split()) >= 2 for f in cc.unmatched
+        )
         if (
             tier0_clean
             and cc.unmatched_ratio == 0.0
             and not cov.contradiction_cues
             and cov.coverage >= coverage_pass_threshold
+            and extractive
+            and not novel_multiword
         ):
             verdict = ShineVerdict(
                 decision="pass",
@@ -576,9 +590,8 @@ class ShineGate:
             decision = "flag"
             gate = "MISSING_CAPABILITY_FLAG"
 
-        # Hard-fact decision floor: an unmatched number/currency/ID is exact-match
-        # evidence — fuzzy tiers may escalate it further but never clear it back
-        # to pass. Fabricated figures are the most damaging class (DESIGN §5.1).
+        # Hard-fact decision floor: unmatched number/currency/ID or multi-word
+        # proper noun cannot be cleared back to pass (DESIGN §5.1 / entity swaps).
         if hard_unmatched and decision == "pass":
             decision = "flag"
             gate = "T1_UNMATCHED_HARD_FACT"

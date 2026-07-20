@@ -1,0 +1,6 @@
+{
+  "calibration_version": "identity-0-placeholder",
+  "thresholds": {},
+  "curves": {},
+  "notes": ["Replaced by calibrate_minilm before image bake when available"]
+}

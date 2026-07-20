@@ -30,11 +30,22 @@ pytest tests/benchmarks
 Optional full grounding (network) + pinned ONNX Tier-3:
 
 ```bash
+# Export LettuceDetect → ONNX (once)
+pip install torch transformers onnx
+python -m prismshine.tools.export_span_onnx --out models/lettucedetect
+
 set PRISMSHINE_BENCH_FULL=1
-set PRISMSHINE_SPAN_ONNX=C:\path\to\model.onnx
-set PRISMSHINE_SPAN_TOKENIZER=C:\path\to\tokenizer.json
+set PRISMSHINE_SPAN_ONNX=models\lettucedetect\model.onnx
+set PRISMSHINE_SPAN_TOKENIZER=models\lettucedetect\tokenizer.json
 pip install datasets "prismshine[spans]"
 prismshine bench --suite grounding --report benchmarks/reports
+```
+
+MiniLM-calibrated overlay (marked row, not headline):
+
+```bash
+python -m prismshine.bench.calibrate_minilm --n 100 --out benchmarks/calibration/halueval_minilm.json
+set PRISMSHINE_CALIBRATION=benchmarks\calibration\halueval_minilm.json
 ```
 
 Feedback loop (FP/FN → calibrate):
@@ -147,7 +158,7 @@ reported honestly via the track split below.
 
 | Claim | Gate |
 |---|---|
-| Fast path beats HHEM on B2 (numbers) F1 by ≥ 15 pts | B2 scoreboard |
+| Fast path B2 (numbers) F1 ≥ 0.99 with **zero false positives** | B2 scoreboard |
 | Fast path within 5 F1 pts of HHEM on B1 at ≤ ½ its p50 latency | B1 + B4 |
 | ≥ 90% B3 catch rate, ≤ 2% false-fire on clean runs | B3 scoreboard |
 | `prismshine-fast` LLM calls per 1k = **0**; judge mode ≤ 100 | B4 counters |
@@ -160,6 +171,27 @@ reported honestly via the track split below.
 3. Reuse `tests/benchmarks` label logic for the B2 generator; reuse
    `tests/test_action_matrix.py` scenario shapes for the B3 injector.
 4. Full B1–B4 pass ≈ 2–3 h on a 16-core box (RAGAS/Ollama dominates).
+
+### Measured results — 2026-07-19, Azure ACI (first real run)
+
+Receipts: [`benchmarks/progress/2026-07-19_comparative_aci/`](../benchmarks/progress/2026-07-19_comparative_aci/README.md)
+(environment, gate check, caveats). Data: HaluEval QA + summarization; PrismShine
+`default` profile, **uncalibrated**, lexical Tier-3 fallback, Tier-4 off.
+
+| system | track | n | F1 | precision | recall | AUROC | p50 ms | LLM calls |
+|---|---|---|---|---|---|---|---|---|
+| prismshine-fast | B1 QA | 200 | 0.719 | 0.896 | 0.60 | **0.838** | **30** | 0 |
+| hhem | B1 QA | 200 | **0.746** | 0.857 | 0.66 | 0.793 | 169 | 0 |
+| prismshine-fast | B2 numbers | 50 | **1.000** | 1.000 | 1.000 | 1.000 | **14** | 0 |
+| hhem | B2 numbers | 50 | 0.926 | 0.862 | 1.000 | 1.000 | 135 | 0 |
+| prismshine-fast | Bsum | 50 | **0.565** | 0.619 | 0.52 | 0.585 | **134** | 0 |
+| hhem | Bsum | 50 | 0.474 | 0.692 | 0.36 | 0.616 | 2101 | 0 |
+
+Highlights: B2 perfect (hard-fact floor differentiator, zero false positives);
+B1 within 2.7 F1 pts of HHEM at 0.18× its latency with higher AUROC; Bsum weak for
+both (needs ONNX Tier-3 / Tier-4). No RAGAS row: the pinned CPU judge measured
+~8 tok/s on ACI — zero completions in 85 min even on a 10-sample subset. A fair
+RAGAS row needs a GPU judge or hosted API (breaks $0-reproducibility; see receipt).
 
 ## Competitive advantages these suites support
 

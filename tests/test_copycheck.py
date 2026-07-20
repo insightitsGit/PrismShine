@@ -63,7 +63,7 @@ def test_date_normalization():
     assert any(f.kind == "date" and f.normalized == "2024-01-05" for f in facts)
 
 
-def test_single_token_place_mismatch():
+def test_place_name_mismatch():
     """Asia vs Europe must surface as unmatched entities (not silent CLEAN_FAST_PATH)."""
     facts = extract_facts("Demand grew in Asia this quarter.")
     assert any(f.kind == "entity" and f.normalized == "asia" for f in facts)
@@ -82,3 +82,21 @@ def test_single_token_place_mismatch():
     r = copycheck(b)
     assert any(f.normalized == "asia" for f in r.unmatched)
     assert r.unmatched_ratio > 0.0
+
+
+def test_entity_swap_whole_phrase_not_surname_match():
+    """Lisa Munn must not match via the bare surname in Olivia Munn."""
+    b, _ = bundle_from_dict(
+        {
+            "question": "Who appeared in Ride Along 2?",
+            "answer": "The actress is Lisa Munn.",
+            "preload": [
+                {
+                    "chunk_id": "1",
+                    "text": "The film stars Kevin Hart and Olivia Munn.",
+                }
+            ],
+        }
+    )
+    r = copycheck(b)
+    assert any(f.normalized == "lisa munn" for f in r.unmatched)

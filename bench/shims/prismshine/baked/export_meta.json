@@ -1,0 +1,8 @@
+{
+  "model_id": "KRLabsOrg/lettucedect-base-modernbert-en-v1",
+  "opset": 14,
+  "max_length": 256,
+  "onnx": "model.onnx",
+  "tokenizer": "tokenizer.json",
+  "note": "Pin via PRISMSHINE_SPAN_ONNX / PRISMSHINE_SPAN_TOKENIZER"
+}

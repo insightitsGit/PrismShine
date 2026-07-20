@@ -65,6 +65,19 @@ _PROPER_STOP = frozenset(
 WEIGHTS = {"number": 3.0, "currency": 3.0, "date": 2.0, "id": 3.0, "entity": 1.5}
 
 
+def _entity_phrase_in_preload(normalized: str, preload_lower: str) -> bool:
+    """Whole-phrase match with word boundaries — no surname-only / token-bag hits."""
+    if not normalized or not preload_lower:
+        return False
+    pat = r"(?<![a-z0-9])" + re.escape(normalized) + r"(?![a-z0-9])"
+    return re.search(pat, preload_lower) is not None
+
+
+def _is_multiword_entity(fact: Fact) -> bool:
+    return fact.kind == "entity" and len(fact.normalized.split()) >= 2
+
+
+
 @dataclass
 class Fact:
     kind: str
@@ -361,7 +374,8 @@ def copycheck(
                 pass
     preload_facts = extract_facts(preload_text, lexicon=lexicon)
     preload_norms = {f.normalized for f in preload_facts}
-    preload_norms |= {t.strip().lower() for t in preload_text.split() if t.strip()}
+    # Token bag is OK for IDs/dates; entities use whole-phrase matching only.
+    preload_token_norms = {t.strip().lower() for t in preload_text.split() if t.strip()}
     preload_nums = [f for f in preload_facts if f.value is not None]
     preload_lower = preload_text.lower()
 
@@ -378,8 +392,14 @@ def copycheck(
                 derived.append(fact)
             else:
                 unmatched.append(fact)
+        elif fact.kind == "entity":
+            if _entity_phrase_in_preload(fact.normalized, preload_lower):
+                matched.append(fact)
+            else:
+                unmatched.append(fact)
         elif (
             fact.normalized in preload_norms
+            or fact.normalized in preload_token_norms
             or fact.raw.lower() in preload_lower
             or (fact.normalized and fact.normalized in preload_lower)
         ):

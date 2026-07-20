@@ -43,3 +43,5 @@ Market context: a 2026 public benchmark (PlaceboBench) measured six major tools 
 | Domain calibration lifts AUROC ≥ 0.10 over generic defaults on each domain pack | `prismshine calibrate` report | calibration overlay JSON (`threshold_status` leaves `proposal`) |
 
 Run all receipts: `prismshine bench --suite all --report benchmarks/reports` (details in [`docs/BENCHMARKS.md`](BENCHMARKS.md)).
+
+**First comparative receipt (2026-07-19, Azure ACI, vs HHEM-2.1-Open):** B2 fabricated-numbers F1 1.000 (HHEM 0.926), B1 QA within 2.7 F1 pts of HHEM at 0.18× its p50 latency with higher AUROC (0.838 vs 0.793), zero LLM calls — uncalibrated, lexical Tier-3. Details: [`benchmarks/progress/2026-07-19_comparative_aci/`](../benchmarks/progress/2026-07-19_comparative_aci/README.md).

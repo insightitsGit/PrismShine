@@ -37,8 +37,11 @@ Thumbs.db
 .env.*
 *.local
 
-# Model / data caches
+# Model / data caches (ONNX baked into ACI via local acr build context only — not git)
 .cache/
+models/
+bench/shims/prismshine/baked/*.onnx
+bench/shims/prismshine/baked/*.onnx.data
 *.onnx
 *.db
 *.sqlite

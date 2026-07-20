@@ -74,42 +74,51 @@ def test_containment_support_short_extractive():
     assert containment_support("General Motors", ctx) == 0.0
 
 
-def test_short_extractive_answer_not_coverage_collapse():
-    """HaluEval-style 1-word answer copied from preload must not collapse."""
-    enc = SharedEncoder(embedder=embedder)
+def test_short_extractive_still_clean_fast_path():
+    from prismshine.gate import ShineGate
+
+    gate = ShineGate.build(embedder=embedder)
     b, _ = bundle_from_dict(
         {
-            "question": "What kind of athlete is she?",
+            "question": "What kind of athlete?",
             "answer": "triathlete",
             "preload": [
                 {
                     "chunk_id": "1",
-                    "text": (
-                        "Claudia Rivas Vega (born 15 June 1989) is a Mexican "
-                        "triathlete. She represents Mexico in competitions."
-                    ),
+                    "text": "Claudia Rivas is a Mexican triathlete.",
+                    "source": "retrieval",
+                }
+            ],
+            "trace": [
+                {
+                    "hop": "r",
+                    "kind": "retrieval",
+                    "status": "ok",
+                    "scores": {"constructive_score": 0.95},
+                    "detail": {"n_chunks": 1, "top_k": 1},
                 }
             ],
         }
     )
-    r = coverage_check(b, enc, tau_sent=0.62)
-    assert r.coverage >= 0.75
-    assert r.signals[0].detail.get("containment_hits", 0) >= 1
+    v = gate.verify(b)
+    assert v.decision == "pass"
+    assert v.resolution_gate == "CLEAN_FAST_PATH"
 
+
+def test_entity_swap_not_clean_fast_path():
     from prismshine.gate import ShineGate
 
     gate = ShineGate.build(embedder=embedder)
-    # healthy retrieval so collapse path is the one under test
-    b2, _ = bundle_from_dict(
+    b, _ = bundle_from_dict(
         {
-            "question": "What kind of athlete is she?",
-            "answer": "triathlete",
+            "question": "Who was appointed Poet Laureate in 1946?",
+            "answer": "Woody Allen was appointed the fifth Poet Laureate in 1946.",
             "preload": [
                 {
                     "chunk_id": "1",
                     "text": (
-                        "Claudia Rivas Vega (born 15 June 1989) is a Mexican "
-                        "triathlete. She represents Mexico in competitions."
+                        "Karl Jay Shapiro was appointed the fifth Poet Laureate "
+                        "Consultant in Poetry to the Library of Congress in 1946."
                     ),
                     "source": "retrieval",
                 }
@@ -125,6 +134,6 @@ def test_short_extractive_answer_not_coverage_collapse():
             ],
         }
     )
-    v = gate.verify(b2)
-    assert v.resolution_gate != "T2_COVERAGE_COLLAPSE"
-    assert v.decision == "pass"
+    v = gate.verify(b)
+    assert v.decision != "pass"
+    assert v.resolution_gate != "CLEAN_FAST_PATH"
