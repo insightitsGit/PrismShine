@@ -1,0 +1,6 @@
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic>=2.6
+numpy>=1.24
+pyyaml>=6.0
+prismguard>=0.1.7

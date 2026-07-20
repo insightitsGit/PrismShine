@@ -41,4 +41,10 @@ docker compose -f bench/compose.yaml up --build -d
   is comparable on quality, not throughput. Optional OpenAI mode = best-case competitor.
 - Content-only track: shims receive only (question, context, answer). PrismShine's
   ledger-aware B3 track stays in the in-process suite (`prismshine bench --suite cause`).
+
+## Stack suite
+
+`bench/stack/` is a separate package-vs-package suite: PrismGuard + PrismShine
+against LLM Guard + MiniLM and a light guard + HHEM path. It includes an explicitly
+separate evidence-aware runtime track. See `bench/stack/README.md`.
 - Fairness rules and go-public gates: `docs/BENCHMARKS.md`.

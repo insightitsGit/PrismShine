@@ -1,0 +1,5 @@
+{
+  "insight-stack": "http://localhost:8101",
+  "oss-llmguard": "http://localhost:8102",
+  "oss-langgraph-hhem": "http://localhost:8103"
+}
