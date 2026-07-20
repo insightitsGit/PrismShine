@@ -3,4 +3,7 @@ uvicorn==0.32.1
 pydantic>=2.6
 numpy>=1.24
 pyyaml>=6.0
-prismguard>=0.1.7
+prismguard[guard-model]>=0.1.7
+onnxruntime>=1.17
+tokenizers>=0.15
+huggingface-hub>=0.23
