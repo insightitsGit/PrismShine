@@ -1,86 +1,61 @@
 # PrismShine
 
-**Anti-hallucination verdict engine for the Insight agent stack.**
+[![PyPI](https://img.shields.io/pypi/v/prismshine.svg)](https://pypi.org/project/prismshine/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0-informational)](https://pypi.org/project/prismshine/)
 
-PrismShine catches hallucinations from both ends in a single unified pipeline:
-
-- **Cause side (trace forensics)** — reads the runtime evidence that no external tool can see (ChorusGraph Route Ledger, node states, cache-gate decisions, retrieval scores, tool results) and detects broken preloads *before* they become hallucinations: empty retrieval, swallowed tool errors, truncated context, stale cache reuse, memory conflicts. Deterministic, zero LLM calls, driven by a versioned failure-signature **Handbook**.
-- **Effect side (grounding verification)** — verifies the final answer against the exact preload the LLM received, using a tiered ladder: lexical copy-checks (numbers/entities/dates) → vector coverage (reusing embeddings the runtime already has) → ONNX span classifier → LLM judge *only* for the residual gray zone.
-
-Both sides fuse into one auditable **ShineVerdict** with a named resolution gate — the same audit-grade decision style as PrismGuard.
-
-> **PASS ≠ true.** A `pass` means the answer is grounded in the provided preload, not that the preload is world-correct. Poisoned or wrong retrieval can still PASS. See [`docs/LIMITS.md`](docs/LIMITS.md).
->
-> **Buffered only (v0).** PrismShine verifies the completed answer before display. It does not mid-stream verify tokens.
->
-> **Moat requires wiring.** Standalone dicts give a strong grounding checker. Cause-side halt + cache/memory consistency need ChorusGraph (or equivalent) `trace`, interceptors, and Cortex/cache hooks — checklist in `docs/LIMITS.md`.
-
-## Design principles
-
-1. **One pipeline, one verdict.** Forensic and grounding signals are fused; there are no separate "phases" a developer has to wire.
-2. **Minimum LLM calls.** Tiers 0–2 are free/deterministic; Tier 3 is a small local ONNX model; Tier 4 (LLM judge) is an opt-in escalation reached by a small fraction of traffic.
-3. **Zero extra embedding cost.** Context vectors are reused from the runtime (retrieval/warm index); only the answer is encoded, once, with the already-loaded local ONNX encoder. No API embedding calls anywhere. Verdicts are content-address cached.
-4. **Audit-grade.** Every verdict names its gate, its firing signatures, and the evidence hash — replayable, ledger-attached, compliance-ready.
-5. **Cause before effect.** A broken preload is flagged (and can halt generation) before tokens are ever spent.
-6. **The consistency contract.** Every state mutation in the stack (fact corrections, source updates, model changes) has BOTH an invalidation path and a deterministic detection backstop — no stale cache entry, warm-index row, or cached verdict may keep answering from pre-mutation state (DESIGN.md §6.1). Only a verifier that lives inside the runtime can guarantee this; stateless external checkers cannot even see these artifacts.
-7. **Zero hard sibling dependencies.** `pip install prismshine` works standalone on any stack (LangGraph, custom runtimes); every Insight sibling is an optional extra that lights up more capability when present, detected at build time and recorded in every verdict — degradation is always transparent, and a missing capability can never manufacture a false PASS (DESIGN.md §8.2).
-
-## Documentation
-
-| Doc | Contents |
-|---|---|
-| [`docs/LIMITS.md`](docs/LIMITS.md) | Scope boundaries: PASS≠truth, streaming, moat wiring, threshold receipts |
-| [`docs/DESIGN.md`](docs/DESIGN.md) | Full architecture: unified pipeline, data model, scoring math, module layout, performance budget |
-| [`docs/prismshine-architecture.png`](docs/prismshine-architecture.png) | One-page visual of the pipeline, plugins, early exits, and support systems |
-| [`docs/HANDBOOK.md`](docs/HANDBOOK.md) | Failure-signature taxonomy: schema + initial catalog of deterministic detectors |
-| [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Integration points with ChorusGraph, PrismGuard, PrismCortex, LangGraph, and standalone use |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Architecture decision records |
-| [`docs/UPSTREAM.md`](docs/UPSTREAM.md) | Coordinated version bumps needed in sibling libraries (prismlib, ChorusGraph, PrismCortex, prismlang) |
-| [`docs/POSITIONING.md`](docs/POSITIONING.md) | Market comparison, standing, honest weaknesses, and the benchmark gates required before claims go public |
-| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Receipt-backed suites: cause-side, grounding, latency/cost, consistency |
-| [`handoffs/`](handoffs/) | Self-contained work orders, one per sibling repo, for implementing the upstream changes (report-back format for verification) |
-| [`kb/README.md`](kb/README.md) | Knowledge base of the 12 sibling Insight libraries (verified from source) |
-
-## Ecosystem position
-
-```
-User query ──► PrismGuard (input firewall)
-                  │
-                  ▼
-             ChorusGraph (runtime) ──► retrieval / tools / PrismCortex memory
-                  │                          │
-                  │   ledger, node state,    │  chunks + existing vectors
-                  │   cache decisions        ▼
-                  ├────────────────► PrismShine EvidenceBundle
-                  ▼                          │
-                LLM answer ─────────────────►│
-                                             ▼
-                                    ShineGate.verify()
-                                             │
-                              ShineVerdict: pass / flag / block / regenerate
-                                    (gate + signatures + spans, ledger-attached)
-```
-
-## Install
+**Anti-hallucination verdict engine — cause-side forensics + effect-side grounding in one auditable gate.**
 
 ```bash
-pip install -e ".[dev]"
-# optional extras: coverage (prismlang), spans, chorusgraph, langgraph, guard, judge-openai, judge-gemini
+pip install "prismshine==0.2.0"
+prismshine capabilities
 ```
 
-Any runtime (LangGraph / custom) gets the same Shine features as ChorusGraph via `prismshine.wiring` — see `docs/INTEGRATION.md` §8.
+> **PASS ≠ world-true.** A `pass` means the answer is grounded in the **preload you provided**, not that the preload is factually correct. See [`docs/LIMITS.md`](docs/LIMITS.md).
 
-### Enterprise / production checklist
+---
 
-1. **Tier-3 ONNX** (not bundled in the wheel — ~1GB):  
-   `python -m prismshine.tools.ensure_span_onnx --export` then pin `PRISMSHINE_SPAN_ONNX` / `PRISMSHINE_SPAN_TOKENIZER`.
-2. **Domain calibration** (marked row, not the uncalibrated headline):  
-   `python -m prismshine.bench.calibrate_minilm --embedder minilm` (or `--embedder hash` offline) → `PRISMSHINE_CALIBRATION=...`.
-3. **Wiring moat** (cause-side halt + consistency): run `python examples/enterprise_wiring_demo.py`, then integrate via `docs/INTEGRATION.md`.
-4. **Tier-4 judge** (opt-in): `pip install 'prismshine[judge-openai]'` + `ShineGate.build(judge="openai")` — see `examples/tier4_judge_demo.py`.
-5. **Receipts before claims**: `prismshine bench --suite all --report benchmarks/reports` and comparative `bench/runner/run_bench.py --runs 3` vs HHEM.
+## What is PrismShine?
 
-## Quick start
+PrismShine is a **self-hosted verifier** for agent / RAG answers. It catches hallucinations from both ends:
+
+| Side | When | What it catches |
+|------|------|-----------------|
+| **Cause (Tier-0)** | Before or after generation | Empty retrieval, swallowed tool errors, truncated context, stale cache reuse, missing ledger hops, memory conflicts |
+| **Effect (Tiers 1–4)** | After the answer exists | Fabricated numbers/entities, coverage collapse, unsupported spans, residual gray-zone (optional LLM judge) |
+
+Both fuse into one **`ShineVerdict`**: `decision` + named `resolution_gate` + `evidence_hash` + signatures / spans — replayable and audit-ready.
+
+**PrismShine is not a prompt-injection firewall** (that’s [PrismGuard](https://pypi.org/project/prismguard/)). It is not an agent runtime (that’s [ChorusGraph](https://pypi.org/project/chorusgraph/) or your own graph). It verifies **answers against evidence**.
+
+### When NOT to use PrismShine
+
+- You only need input jailbreak / injection filtering → use PrismGuard.  
+- You need mid-stream token verification → not in v0 (buffered answers only).  
+- You expect “PASS” to mean world knowledge is correct → it means *grounded in preload*.
+
+---
+
+## Why PrismShine?
+
+| Pain | PrismShine answer |
+|------|-------------------|
+| Encoders only see the final text | Tier-0 handbook reads **runtime evidence** (trace / ledger / node state) |
+| Broken retrieval still burns LLM tokens | `pre_llm_check` / interceptors can **halt before generation** |
+| Numbers look fluent but are wrong | Tier-1 copy-check (exact figures / entities) — B2 F1 **1.0 / 0 FP** vs HHEM |
+| Judge APIs are expensive | Default path is **0 LLM calls**; Tier-4 is opt-in gray-zone only |
+| Stale cache after a fact correction | Consistency hooks + `CACHE_PREDATES_FACT_UPDATE` detection |
+| “Why did we allow this?” | Named `resolution_gate` + evidence hash on every verdict |
+| Vendor lock-in to one runtime | Works standalone, LangGraph, or ChorusGraph via the same wiring API |
+
+---
+
+## Quick start (30 seconds)
+
+```bash
+pip install prismshine
+```
 
 ```python
 from prismshine import EvidenceBundle, PreloadChunk, ShineGate
@@ -103,27 +78,294 @@ print(verdict.decision, verdict.resolution_gate, verdict.evidence_hash)
 print(gate.capabilities())
 ```
 
-## CLI
-
 ```bash
 prismshine capabilities
-prismshine verify bundle.json --profile default
-prismshine calibrate ./samples --mode synthetic
+prismshine verify path/to/bundle.json --profile default
 prismshine bench --suite all --report benchmarks/reports
 ```
 
-## Profiles & handbook packs
+**Runnable demos**
 
-```python
-gate = ShineGate.build(profile="clinical")  # merges builtin clinical.yaml pack
-# finance / legal likewise. Thresholds remain "proposal" until:
-#   prismshine calibrate ./samples --mode synthetic
+```bash
+python examples/enterprise_wiring_demo.py   # pre-gen halt + grounding + consistency
+python examples/tier4_judge_demo.py         # optional OpenAI judge (needs key + extra)
 ```
 
-`gate.capabilities()` reports `span_backend` (`onnx`|`lexical`|`unavailable`), `threshold_status`, and `pass_means`.
+---
 
-Pin Tier-3 for CI reproducibility: `PRISMSHINE_SPAN_MODEL` (HF model id), `PRISMSHINE_SPAN_ONNX` (local `.onnx`), and optionally `PRISMSHINE_SPAN_TOKENIZER`. Without a pin/artifact the gate honestly reports `span_backend=lexical`. Run `prismshine calibrate` (or `feedback` → `calibrate --mode feedback`) so `threshold_status` leaves `proposal` before accuracy claims. See `docs/BENCHMARKS.md`.
+## How to implement (choose your path)
+
+### 1) Standalone dict verify (any app)
+
+Best for scripts, batch eval, or a service that already has `question` / `answer` / `context`.
+
+```python
+from prismshine import EvidenceBundle, PreloadChunk, ShineGate, TraceStep
+
+gate = ShineGate.build(profile="finance")
+bundle = EvidenceBundle(
+    run_id="req-1",
+    question="What was Q2 revenue?",
+    answer="Q2 revenue was $1,200,000.",
+    preload=[PreloadChunk(chunk_id="c0", text="Q2 revenue was $1,200,000.", source="retrieval")],
+    trace=[TraceStep(hop="retrieve", kind="retrieval", status="ok", detail={"n_chunks": 1})],
+)
+verdict = gate.verify(bundle)
+if verdict.decision == "block":
+    ...  # refuse or regenerate
+```
+
+### 2) BYO runtime wiring (LangGraph / custom) — recommended moat path
+
+Same capabilities as ChorusGraph plugins, without requiring ChorusGraph:
+
+```python
+from prismshine import ShineGate, wrap_llm, shine_verify_node, require_shine_wiring
+from prismshine.wiring import pre_llm_check, record_retrieval, append_trace
+
+gate = ShineGate.build(profile="default")
+
+def retrieve(state: dict) -> dict:
+    docs = my_retriever(state["question"])
+    state = append_trace(state, record_retrieval("retrieve", n_chunks=len(docs)))
+    return {**state, "docs": docs}
+
+# Halt before tokens when preload is broken
+decision = pre_llm_check(gate, state)
+if decision.should_halt:
+    return decision.fallback
+
+# Or wrap the provider boundary
+llm = wrap_llm(my_model, gate, state_factory=lambda: current_state)
+
+# Guaranteed post-gen path
+graph.add_node("shine", shine_verify_node(gate, answer_key="answer"))
+require_shine_wiring(compiled, gate, already_has_shine_node=True)
+```
+
+Full matrix: [`docs/INTEGRATION.md`](docs/INTEGRATION.md) §8 · demo: [`examples/enterprise_wiring_demo.py`](examples/enterprise_wiring_demo.py).
+
+### 3) ChorusGraph plugin (richest out of the box)
+
+```bash
+pip install "prismshine[chorusgraph]"
+```
+
+```python
+from prismshine import ShineGate
+from prismshine.integrations.chorusgraph import require_shine, shine_node
+
+gate = ShineGate.build(profile="default")
+g.add_node("shine", shine_node(gate, answer_key="reply"))
+g.add_edge("generate", "shine")
+compiled = g.compile(stack=stack)
+require_shine(compiled, gate, prefer="both", already_has_shine_node=True)
+```
+
+Uses Route Ledger steps, warm chunk vectors when present, and ADR-008 interceptors (`before_llm` / `after_llm`). Details: [`docs/INTEGRATION.md`](docs/INTEGRATION.md) §1.
+
+### 4) LangGraph plugin
+
+```bash
+pip install "prismshine[langgraph]"
+```
+
+```python
+from prismshine.integrations.langgraph import require_shine, shine_langgraph_node
+
+gate = ShineGate.build(profile="default")
+graph.add_node("shine", shine_langgraph_node(gate, answer_key="answer"))
+require_shine(compiled, gate, already_has_shine_node=True)
+```
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Unified gate** | One `ShineGate.verify` — forensics + grounding fused |
+| **Handbook Tier-0** | Versioned YAML signatures (`EMPTY_RETRIEVAL`, cache/tool/LLM failures, …) |
+| **Pre-generation halt** | `pre_llm_check` / interceptors stop broken preloads before tokens |
+| **Tier-1 copy-check** | Numbers, entities, dates — hard fabricated-figure floor |
+| **Tier-2 coverage** | Vector support using runtime embeddings when available; hash fallback |
+| **Tier-3 spans** | Optional LettuceDetect-class ONNX (not in the wheel — download once) |
+| **Tier-4 judge** | Opt-in OpenAI / Gemini on residual gray zone only |
+| **Named audit gate** | Every verdict names `resolution_gate` + `evidence_hash` |
+| **Profiles** | `default` / `clinical` / `finance` / `legal` handbook packs |
+| **Calibration** | `prismshine calibrate` + feedback JSONL overlays |
+| **Consistency contract** | Invalidation hooks + stale-cache detection dual-rail |
+| **Zero hard siblings** | Core `pip install prismshine` has no Insight package dependency |
+
+---
+
+## Architecture
+
+```
+                    ┌──────────────────────────────────────┐
+  question ────────►│  EvidenceBundle                       │
+  answer ──────────►│  preload[] · trace[] · node_state     │
+  runtime evidence─►└──────────────────┬───────────────────┘
+                                       ▼
+                              ShineGate.verify()
+                                       │
+              ┌────────────────────────┼────────────────────────┐
+              ▼                        ▼                        ▼
+         Tier-0 handbook          Tiers 1–3                 Tier-4 (opt)
+         (cause / halt)           copy · cover · spans      LLM judge
+              └────────────────────────┼────────────────────────┘
+                                       ▼
+                         ShineVerdict (pass|flag|block|regenerate)
+                         resolution_gate · signatures · spans · hash
+```
+
+Design deep-dive: [`docs/DESIGN.md`](docs/DESIGN.md) · diagram: [`docs/prismshine-architecture.png`](docs/prismshine-architecture.png).
+
+---
+
+## Install & extras
+
+```bash
+pip install prismshine                 # core — CPU, zero LLM
+pip install "prismshine[spans]"        # Tier-3 ONNX runtime + tokenizers
+pip install "prismshine[coverage]"     # shared prismlang encoder session
+pip install "prismshine[chorusgraph]"  # ChorusGraph plugins
+pip install "prismshine[langgraph]"    # LangGraph plugins
+pip install "prismshine[guard]"        # PrismGuard symmetry helpers
+pip install "prismshine[judge-openai]" # Tier-4 OpenAI
+pip install "prismshine[judge-gemini]" # Tier-4 Gemini
+pip install "prismshine[dev]"          # pytest + ruff
+```
+
+### Production checklist
+
+1. **Tier-3 ONNX** (~1 GB, not in the wheel):
+
+   ```bash
+   pip install "prismshine[spans]"
+   python -m prismshine.tools.ensure_span_onnx --export
+   # then pin:
+   #   PRISMSHINE_SPAN_ONNX=.../model.onnx
+   #   PRISMSHINE_SPAN_TOKENIZER=.../tokenizer.json
+   ```
+
+2. **Domain calibration** (marked row, not the uncalibrated headline):
+
+   ```bash
+   python -m prismshine.bench.calibrate_minilm --embedder hash   # CI-safe
+   # or --embedder minilm for stronger overlays
+   set PRISMSHINE_CALIBRATION=path\to\overlay.json
+   ```
+
+3. **Wire the moat** — `examples/enterprise_wiring_demo.py` then [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
+
+4. **Receipts before claims** — `prismshine bench --suite all` and comparative vs HHEM ([`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)).
+
+`gate.capabilities()` reports `span_backend` (`onnx`|`lexical`|`unavailable`), `threshold_status`, and `pass_means`. Without ONNX the gate stays honest (`lexical`) — it never fakes span SotA.
+
+---
+
+## CLI
+
+```bash
+prismshine capabilities [--profile default|clinical|finance|legal]
+prismshine verify bundle.json --profile default
+prismshine feedback bundle.json --label hallucination --out feedback.jsonl
+prismshine calibrate ./samples --mode synthetic --profile clinical --out cal.yaml
+prismshine bench --suite all|cause|grounding|latency|consistency --report benchmarks/reports
+```
+
+---
+
+## Benchmarks (PrismShine only)
+
+Public claims use **PrismShine vs encoder/judge competitors** and Shine-only suites — not sibling package stacks.
+
+### Headline comparative receipt (2026-07-20, Azure ACI, ONNX Tier-3)
+
+Vs Vectara **HHEM-2.1-Open** — HaluEval QA / numbers / summarization. Receipt: [`benchmarks/progress/2026-07-20_run4_onnx/`](benchmarks/progress/2026-07-20_run4_onnx/README.md).
+
+| system | B1 QA F1 | B2 numbers F1 | Bsum F1 | B1 p50 | LLM calls |
+|--------|----------|---------------|---------|--------|-----------|
+| **prismshine-fast** | **0.831** | **1.000** (0 FP) | **0.600** | **90 ms** | **0** |
+| hhem-2.1-open | 0.746 | 0.926 | 0.474 | 216 ms | 0 |
+
+### In-process gates (`prismshine bench`)
+
+| Suite | Proves |
+|-------|--------|
+| `cause` | Tier-0 catch ≥90% on injected runtime failures; pre-gen 0 model calls |
+| `grounding` | Hard synthetic + optional RAGTruth |
+| `latency` | p50/p95 + judge escalation |
+| `consistency` | Stale-cache dual-rail |
+
+Methodology & fairness: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) · market stance: [`docs/POSITIONING.md`](docs/POSITIONING.md).
+
+---
+
+## Profiles & handbook
+
+```python
+gate = ShineGate.build(profile="clinical")  # or finance / legal / default
+```
+
+Builtin packs live under `prismshine/handbook/builtin/`. Thresholds stay `proposal` until you run `prismshine calibrate` (or feedback → calibrate). Catalog: [`docs/HANDBOOK.md`](docs/HANDBOOK.md).
+
+---
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [`docs/LIMITS.md`](docs/LIMITS.md) | PASS≠truth, streaming, moat wiring boundaries |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Architecture, scoring, module layout |
+| [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | ChorusGraph · LangGraph · Guard · Cortex · BYO |
+| [`docs/HANDBOOK.md`](docs/HANDBOOK.md) | Failure-signature taxonomy |
+| [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Receipts before claims |
+| [`docs/POSITIONING.md`](docs/POSITIONING.md) | Market comparison & gates |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADRs |
+| [`docs/UPSTREAM.md`](docs/UPSTREAM.md) | Sibling version floors |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
+
+---
+
+## Examples
+
+| Example | What it shows |
+|---------|----------------|
+| [`examples/enterprise_wiring_demo.py`](examples/enterprise_wiring_demo.py) | Pre-gen halt, grounding pass/fail, fact-correction cache invalidation |
+| [`examples/tier4_judge_demo.py`](examples/tier4_judge_demo.py) | Opt-in Tier-4 OpenAI judge |
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/insightitsGit/PrismShine.git
+cd PrismShine
+pip install -e ".[dev,spans]"
+pytest
+ruff check prismshine tests
+prismshine bench --suite all --report benchmarks/reports
+```
+
+---
+
+## Publishing (maintainers)
+
+```bash
+pip install build twine
+python -m build
+twine check dist/*
+# twine upload dist/*    # after tag v0.2.0 — requires PyPI credentials
+```
+
+Git: commit on `main`, tag `v0.2.0`, push tag when ready. **Do not force-push `main`.**
+
+---
 
 ## Status
 
-**0.1.0** implemented. Upstream siblings shipped (prismlang 0.1.2, prismlib 0.5.0, prismlib-plus 0.8.0, prismcortex 0.3.0, chorusgraph 1.3.0). Design authority: `docs/DESIGN.md`. Honest limits: `docs/LIMITS.md`.
+**0.2.0** — enterprise-ready open source for the self-hosted fast verifier lane (HaluEval vs HHEM receipt + FIX hardening). Category-creator / beats-LLM-judge claims still need production wiring receipts and a fair judge comparator row.
+
+License: Apache-2.0 · Author: Insight IT Solutions LLC · PyPI: [prismshine](https://pypi.org/project/prismshine/) · GitHub: [insightitsGit/PrismShine](https://github.com/insightitsGit/PrismShine)

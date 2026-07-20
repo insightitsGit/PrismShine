@@ -52,3 +52,12 @@ bench/shims/prismshine/baked/*.onnx.data
 
 # Generated benchmark receipts (re-run via `prismshine bench`)
 benchmarks/reports/
+
+# Local ACI target files (may contain IPs)
+bench/stack/targets_aci*.json
+bench/runner/targets*.json
+!bench/runner/targets_b1.json
+!bench/stack/targets.example.json
+
+# Stack suite raw traces (keep scoreboard/summary in progress/)
+bench/stack/results/**/raw_*.jsonl

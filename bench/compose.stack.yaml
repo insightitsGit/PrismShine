@@ -1,7 +1,7 @@
 # Stack suite local topology. Build context for insight-stack is the repository root.
 services:
   insight-stack:
-    build: { context: .., dockerfile: bench/shims/insight-stack/Dockerfile }
+    build: { context: .., dockerfile: shims/insight-stack/Dockerfile }
     ports: ["8101:8000"]
     cpus: 2
     mem_limit: 4g

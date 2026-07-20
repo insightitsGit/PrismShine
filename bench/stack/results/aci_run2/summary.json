@@ -1,0 +1,104 @@
+{
+  "created": "2026-07-20T19:37:36Z",
+  "counts": {
+    "S1": 40,
+    "H1": 80,
+    "R1": 12
+  },
+  "r1_note": "Evidence-aware track; compare only within its separately labeled column.",
+  "systems": {
+    "oss-llmguard": {
+      "S1": {
+        "tp": 20,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "H1": {
+        "tp": 18,
+        "fp": 26,
+        "fn": 22,
+        "precision": 0.4091,
+        "recall": 0.45,
+        "f1": 0.4286
+      },
+      "R1_evidence_aware": {
+        "n_runtime_fail": 6,
+        "n_runtime_ok": 6,
+        "catch_rate": 0.0,
+        "false_alarm": 0.0
+      },
+      "P1": {
+        "n": 132,
+        "p50_ms": 330.84,
+        "p95_ms": 528.29,
+        "llm_calls_total": 0,
+        "cost_usd_total": 0.0
+      }
+    },
+    "insight-stack": {
+      "S1": {
+        "tp": 18,
+        "fp": 10,
+        "fn": 2,
+        "precision": 0.6429,
+        "recall": 0.9,
+        "f1": 0.75
+      },
+      "H1": {
+        "tp": 31,
+        "fp": 2,
+        "fn": 9,
+        "precision": 0.9394,
+        "recall": 0.775,
+        "f1": 0.8493
+      },
+      "R1_evidence_aware": {
+        "n_runtime_fail": 6,
+        "n_runtime_ok": 6,
+        "catch_rate": 0.0,
+        "false_alarm": 0.0
+      },
+      "P1": {
+        "n": 132,
+        "p50_ms": 538.48,
+        "p95_ms": 927.74,
+        "llm_calls_total": 0,
+        "cost_usd_total": 0.0
+      }
+    },
+    "oss-langgraph-hhem": {
+      "S1": {
+        "tp": 10,
+        "fp": 0,
+        "fn": 10,
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6667
+      },
+      "H1": {
+        "tp": 29,
+        "fp": 4,
+        "fn": 11,
+        "precision": 0.8788,
+        "recall": 0.725,
+        "f1": 0.7945
+      },
+      "R1_evidence_aware": {
+        "n_runtime_fail": 6,
+        "n_runtime_ok": 6,
+        "catch_rate": 0.0,
+        "false_alarm": 0.0
+      },
+      "P1": {
+        "n": 132,
+        "p50_ms": 176.0,
+        "p95_ms": 323.1,
+        "llm_calls_total": 0,
+        "cost_usd_total": 0.0
+      }
+    }
+  }
+}

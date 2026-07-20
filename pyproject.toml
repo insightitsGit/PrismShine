@@ -5,17 +5,29 @@ build-backend = "hatchling.build"
 [project]
 name = "prismshine"
 version = "0.2.0"
-description = "Anti-hallucination verdict engine for the Insight agent stack: trace forensics + grounding verification in one auditable gate."
+description = "Anti-hallucination verdict engine: cause-side forensics + grounding verification in one auditable gate."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Insight IT Solutions LLC", email = "insightits.info@gmail.com" }]
+keywords = [
+    "hallucination",
+    "rag",
+    "grounding",
+    "agent",
+    "verification",
+    "llm",
+    "audit",
+    "prismshine",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
     "numpy>=1.24",
@@ -38,6 +50,11 @@ prismshine = "prismshine.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/insightitsGit/PrismShine"
+Documentation = "https://github.com/insightitsGit/PrismShine/blob/main/docs/DESIGN.md"
+Repository = "https://github.com/insightitsGit/PrismShine"
+Changelog = "https://github.com/insightitsGit/PrismShine/blob/main/CHANGELOG.md"
+Issues = "https://github.com/insightitsGit/PrismShine/issues"
+"Benchmark receipt" = "https://github.com/insightitsGit/PrismShine/tree/main/benchmarks/progress/2026-07-20_run4_onnx"
 
 [tool.hatch.build.targets.wheel]
 packages = ["prismshine"]

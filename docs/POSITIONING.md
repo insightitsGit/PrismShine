@@ -21,7 +21,7 @@ Market context: a 2026 public benchmark (PlaceboBench) measured six major tools 
 
 - **Category-creator:** only product doing runtime-integrated hallucination *prevention* (cause-side forensics + pre-generation halt + consistency contract). Structural moat — competitors must become runtimes (or adopt the same ledger contract) to copy it.
 - **Cost leader:** majority path is Tier 0–2, CPU, zero network, zero marginal cost; pre-gen halting *saves* generation spend. No competitor can claim verification that pays for itself.
-- **Best-in-class auditability:** named gates, evidence pointers, content-addressed replay — the regulated-vertical (legal/clinical/finance) differentiator; strongest when sold with PrismGuard + PrismCortex as an auditable input→memory→output chain.
+- **Best-in-class auditability:** named gates, evidence pointers, content-addressed replay — the regulated-vertical (legal/clinical/finance) differentiator.
 - **Peer-competitive raw detection:** Tier-3 adoption = LettuceDetect-class parity at v0, with a data-advantaged path to lead (ledger traces with Tier-0-labeled causes are proprietary training data — ADR-8).
 
 ## Honest weaknesses (do not paper over)

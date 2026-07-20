@@ -44,7 +44,5 @@ docker compose -f bench/compose.yaml up --build -d
 
 ## Stack suite
 
-`bench/stack/` is a separate package-vs-package suite: PrismGuard + PrismShine
-against LLM Guard + MiniLM and a light guard + HHEM path. It includes an explicitly
-separate evidence-aware runtime track. See `bench/stack/README.md`.
-- Fairness rules and go-public gates: `docs/BENCHMARKS.md`.
+`bench/stack/` is **internal ecosystem QA** (not a PrismShine public scoreboard).
+See `bench/stack/README.md`. Public claims use this comparative suite + `docs/BENCHMARKS.md`.

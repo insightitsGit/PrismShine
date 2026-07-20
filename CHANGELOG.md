@@ -7,7 +7,8 @@
 - `python -m prismshine.bench.calibrate_minilm --embedder hash|minilm` — crash-safe calibration overlays.
 - Comparative runner `--runs N` median scoreboard (enterprise multi-seed gate).
 - Examples: `examples/enterprise_wiring_demo.py`, `examples/tier4_judge_demo.py`.
-- Comparative receipt: HaluEval vs HHEM run4 ONNX (B1 F1 0.831 > HHEM 0.746).
+- Comparative receipt: HaluEval vs HHEM run4 ONNX (B1 F1 0.831 > HHEM 0.746; B2 1.0 / 0 FP).
+- Public README rewritten for PyPI (install paths, wiring recipes, Shine-only benchmark headline).
 
 ## 0.1.0
 

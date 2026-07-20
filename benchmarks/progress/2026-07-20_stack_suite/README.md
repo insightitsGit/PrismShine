@@ -1,5 +1,8 @@
 # Stack suite — ACI run3 (correct Guard wiring)
 
+> **INTERNAL** — not a PrismShine public claim. Shine product numbers:
+> [`../2026-07-20_run4_onnx/`](../2026-07-20_run4_onnx/README.md).
+
 **Authoritative stack receipt** after fixing PrismGuard integration.
 
 ## What was wrong in run1 / run2

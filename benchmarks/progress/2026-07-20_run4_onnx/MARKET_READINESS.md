@@ -1,5 +1,7 @@
 # Market readiness snapshot — 2026-07-20 (post v0.2.0 enterprise hardening)
 
+**Public PrismShine headline** (vs HHEM only). Sibling stack suites are out of scope here.
+
 Saved scoreboard: [`scoreboard.md`](scoreboard.md) · [`summary.json`](summary.json)
 
 ## Are the results good?

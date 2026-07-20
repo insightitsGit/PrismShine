@@ -2,6 +2,8 @@
 
 Family rule: **public accuracy / cost / moat claims require a green receipt** from this harness (`docs/POSITIONING.md`).
 
+**Public benchmark surface = PrismShine only.** Headline numbers are Shine vs encoder/judge competitors (HHEM, RAGAS, etc.) plus Shine-only cause / consistency / latency suites. Sibling packages (PrismGuard, ChorusGraph, …) are integration details — not part of PrismShine product scoreboards.
+
 ## Why these suites (not just RAGTruth)
 
 | Suite | What it proves | Competitor coverage |
@@ -199,31 +201,10 @@ Prior containment-only run (2026-07-19, lexical Tier-3): see
 1. **Cause-side + pre-gen halt** — category gap vs all effect-only tools.
 2. **Consistency contract** — stale cache after fact correction.
 3. **Cost** — CPU fast path; judge only on residual gray zone.
-4. **Runtime-agnostic wiring** — same cause suite uses `prismshine.wiring` (no ChorusGraph required).
+4. **Runtime-agnostic wiring** — same cause suite uses `prismshine.wiring` (any runtime that emits the evidence contract).
 
 See also: `docs/POSITIONING.md`, `docs/INTEGRATION.md` §8 (BYO runtime).
 
-## Stack suite (package vs package)
+## Internal only — not a PrismShine product claim
 
-The Stack suite in `bench/stack/` is separate from the content-only HHEM
-comparative benches above. It measures three deployable package paths behind
-`POST /stack_evaluate` (with `/evaluate` kept as a compatibility alias):
-
-| Container | Package path | Scope |
-|---|---|---|
-| `insight-stack` | PrismGuard → PrismShine wiring/ledger evidence | Guard, grounding, and runtime evidence |
-| `oss-llmguard` | LLM Guard PromptInjection (structural-regex fallback) + MiniLM cosine | Guard and content-only grounding |
-| `oss-langgraph-hhem` | light regex guard → Vectara HHEM | Guard and content-only grounding |
-
-Tracks are S1 prompt injection, H1 HaluEval hallucination detection, R1 injected
-runtime failures, and P1 latency/call counters derived from the evaluated requests.
-Every target receives identical S1/H1 context and request fields. R1 includes
-trace/node-state/doc evidence; systems that cannot consume a runtime ledger report
-`saw_evidence=false`. Therefore R1 is labeled **evidence-aware** and has its own
-catch-rate / false-alarm column, never a like-for-like F1 comparison with H1.
-
-For Azure Container Instances, start all three containers, run
-`python bench/stack/run_stack_bench.py --targets ...`, collect `summary.json` and
-`scoreboard.md`, then stop or delete the ACI groups immediately. ACI billing
-continues while groups are running; stopping/deleting is a required final benchmark
-step, not an optional cleanup.
+Package-vs-package work under `bench/stack/` (Guard / graph / OSS security stacks) is **ecosystem integration QA**. Do not cite its S1/P1 rows in PrismShine marketing, README, or POSITIONING. Ops notes live in `bench/stack/README.md` and `handoffs/` for sibling repos.
