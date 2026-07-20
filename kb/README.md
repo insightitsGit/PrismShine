@@ -17,7 +17,7 @@ Visual map: `kb/insight-ecosystem-map.png` (regenerate with `python kb/diagrams/
 | [PrismCortex](libraries/prismcortex.md) | `prismcortex` | 0.3.0 | MIT (open-core) | `C:\code\PrismCortex` | Bitemporal agent memory graph + deterministic replay |
 | [ChorusMesh](libraries/chorusmesh.md) | `chorusmesh` | 0.1.0 | Commercial | `C:\code\ChorusMesh` | Paid alerts (Slack/PagerDuty) + Kafka/NATS transport over prismlib |
 | [VectorBridge](libraries/vectorbridge.md) | `insight-vector-bridge` (imports as `vectorbridge`) | 0.1.0 | MIT | `C:\code\VectorBridge` | Vector DB migration with cipher transport + semantic validation |
-| [PrismGuard](libraries/prismguard.md) | `prismguard` | 0.1.7 | Apache-2.0 (open-core) | `C:\code\PrismGaurd` | Prompt-injection firewall with auditable resolution gates |
+| [PrismGuard](libraries/prismguard.md) | `prismguard` | 0.1.8 | Apache-2.0 (open-core) | `C:\code\PrismGaurd` | Prompt-injection firewall with auditable resolution gates |
 | [ChorusGraph](libraries/chorusgraph.md) | `chorusgraph` | 1.3.0 | Apache-2.0 (open-core) | `C:\code\ChorusGraph` | Native BSP agent graph runtime — the ecosystem hub |
 | [InsightPlugIn](libraries/insightplugin.md) | `insight-plugin` (VSIX) | 0.1.0 | MIT | `C:\code\InsightPlugIn` | Cursor/VS Code SMS remote control extension (TypeScript) |
 

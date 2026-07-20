@@ -208,3 +208,31 @@ See also: `docs/POSITIONING.md`, `docs/INTEGRATION.md` §8 (BYO runtime).
 ## Internal only — not a PrismShine product claim
 
 Package-vs-package work under `bench/stack/` (Guard / graph / OSS security stacks) is **ecosystem integration QA**. Do not cite its S1/P1 rows in PrismShine marketing, README, or POSITIONING. Ops notes live in `bench/stack/README.md` and `handoffs/` for sibling repos.
+
+## Runtime suite — ChorusGraph + PrismShine vs competitors
+
+**Purpose:** prove the **wired-runtime moat** (ledger-aware R1 + H1 grounding) without PrismGuard.
+Fair head-to-head for “agent runtime + verifier” vs typical LangGraph-shaped stacks.
+
+| System | Container | Role |
+|---|---|---|
+| **chorus-shine** | `chorus-shine` | ChorusGraph + PrismShine (`require_shine`, shine pre/post). Sees ledger. |
+| **oss-langgraph-hhem** | `oss-langgraph-hhem` | Vectara HHEM-2.1-Open. Evidence-blind. |
+| **oss-langgraph-minilm** | `oss-langgraph-minilm` | DIY MiniLM cosine. Evidence-blind. |
+| **oss-langgraph-lettuce** | `oss-langgraph-lettuce` | [LettuceDetect](https://pypi.org/project/lettucedetect/) spans — closest open peer to Shine Tier-3. Evidence-blind. |
+
+Tracks: **H1** (HaluEval F1), **R1** (injected runtime failures — evidence-aware), **P1** (latency). No S1.
+
+**PrismGuard** belongs in `bench/stack/` (S1 + Guard→Shine path), pinned to
+[`prismguard>=0.1.8`](https://pypi.org/project/prismguard/0.1.8/) — not this runtime scoreboard.
+
+```powershell
+docker compose -f bench/compose.runtime.yaml up --build -d
+python -m bench.runtime.run_runtime_bench `
+  --targets bench/runtime/targets.example.json --n-h1 40 `
+  --out bench/runtime/results/local
+```
+
+In-process smoke (CI / no HF): `python -m bench.runtime.smoke_local --n-h1 4`.
+
+Details: [`bench/runtime/README.md`](../bench/runtime/README.md).

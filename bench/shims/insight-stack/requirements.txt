@@ -5,7 +5,7 @@ numpy>=1.24
 pyyaml>=6.0
 # Guard: ONNX + prismrag taxonomy (do NOT use prismguard[prism] — it pulls prismlib
 # and collides with ChorusGraph's prismlib-plus).
-prismguard[guard-model]>=0.1.7
+prismguard[guard-model]>=0.1.8
 prismrag-patch>=0.2.1,<1.0.0
 onnxruntime>=1.17
 tokenizers>=0.15

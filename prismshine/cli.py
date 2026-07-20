@@ -14,6 +14,21 @@ from prismshine.evidence.builder import bundle_from_dict
 from prismshine.gate import ShineGate
 
 
+def _load_json(path: Path) -> dict:
+    """Load JSON; accept UTF-8 BOM (common on Windows PowerShell Set-Content)."""
+    text = path.read_text(encoding="utf-8-sig")
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError(f"JSON root must be an object: {path}")
+    return data
+
+
+def _bundle_payload(data: dict) -> dict:
+    if "bundle" in data and isinstance(data["bundle"], dict):
+        return data["bundle"]
+    return data
+
+
 def cmd_capabilities(args: argparse.Namespace) -> int:
     gate = ShineGate.build(
         profile=args.profile,
@@ -24,11 +39,33 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
     return 0
 
 
+def _demo_bundle_path() -> Path:
+    """Resolve the packaged sample bundle (works after pip/git install)."""
+    try:
+        from importlib.resources import files
+
+        return Path(str(files("prismshine.data").joinpath("sample_bundle.json")))
+    except Exception:
+        # Editable / source tree fallback
+        return Path(__file__).resolve().parent / "data" / "sample_bundle.json"
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
-    path = Path(args.bundle)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if "bundle" in data:
-        data = data["bundle"]
+    if getattr(args, "demo", False):
+        path = _demo_bundle_path()
+    else:
+        path = Path(args.bundle) if args.bundle else None
+    if path is None:
+        print(
+            "error: provide a bundle JSON path, or pass --demo to use the packaged sample",
+            file=sys.stderr,
+        )
+        return 2
+    if not path.is_file():
+        print(f"error: bundle not found: {path}", file=sys.stderr)
+        print("hint: try  prismshine verify --demo", file=sys.stderr)
+        return 2
+    data = _bundle_payload(_load_json(path))
     bundle, feedback = bundle_from_dict(data)
     gate = ShineGate.build(
         profile=args.profile,
@@ -39,6 +76,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     out = verdict.model_dump(mode="json")
     if args.verbose:
         out["_feedback"] = feedback
+        out["_bundle_path"] = str(path)
     print(json.dumps(out, indent=2, sort_keys=True))
     return 0 if verdict.decision in {"pass", "flag"} else 1
 
@@ -47,9 +85,10 @@ def cmd_feedback(args: argparse.Namespace) -> int:
     from prismshine.feedback import record_feedback
 
     path = Path(args.bundle)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if "bundle" in data:
-        data = data["bundle"]
+    if not path.is_file():
+        print(f"error: bundle not found: {path}", file=sys.stderr)
+        return 2
+    data = _bundle_payload(_load_json(path))
     bundle, _ = bundle_from_dict(data)
     gate = ShineGate.build(profile=getattr(args, "profile", "default"))
     verdict = gate.verify(bundle)
@@ -65,6 +104,10 @@ def cmd_feedback(args: argparse.Namespace) -> int:
 
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
+    root = Path(args.dir)
+    if not root.exists():
+        print(f"error: calibrate path not found: {root}", file=sys.stderr)
+        return 2
     gate = ShineGate.build(profile=args.profile, strictness=args.strictness)
     report = calibrate_dir(args.dir, mode=args.mode, gate=gate)
     payload = {
@@ -111,7 +154,17 @@ def main(argv: list[str] | None = None) -> int:
     p_caps.set_defaults(func=cmd_capabilities)
 
     p_ver = sub.add_parser("verify", help="Verify a bundle JSON file")
-    p_ver.add_argument("bundle", help="Path to EvidenceBundle JSON")
+    p_ver.add_argument(
+        "bundle",
+        nargs="?",
+        default=None,
+        help="Path to EvidenceBundle JSON (or use --demo)",
+    )
+    p_ver.add_argument(
+        "--demo",
+        action="store_true",
+        help="Verify the packaged sample bundle (works after pip/git install)",
+    )
     p_ver.add_argument("--profile", default="default")
     p_ver.add_argument("--strictness", default="standard")
     p_ver.add_argument("--handbook", default="builtin")
@@ -167,7 +220,20 @@ def main(argv: list[str] | None = None) -> int:
     p_bench.set_defaults(func=cmd_bench)
 
     args = parser.parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except json.JSONDecodeError as exc:
+        print(f"error: invalid JSON: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

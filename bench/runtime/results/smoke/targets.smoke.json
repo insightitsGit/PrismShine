@@ -1,0 +1,6 @@
+{
+  "chorus-shine": "http://127.0.0.1:18201",
+  "oss-langgraph-hhem": "http://127.0.0.1:18202",
+  "oss-langgraph-minilm": "http://127.0.0.1:18203",
+  "oss-langgraph-lettuce": "http://127.0.0.1:18204"
+}

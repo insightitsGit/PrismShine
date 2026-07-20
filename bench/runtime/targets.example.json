@@ -1,0 +1,6 @@
+{
+  "chorus-shine": "http://localhost:8201",
+  "oss-langgraph-hhem": "http://localhost:8202",
+  "oss-langgraph-minilm": "http://localhost:8203",
+  "oss-langgraph-lettuce": "http://localhost:8204"
+}

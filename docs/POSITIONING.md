@@ -55,8 +55,9 @@ Run all receipts: `prismshine bench --suite all --report benchmarks/reports` (de
 | Cause / consistency / latency receipts | **PASS** in `benchmarks/reports/` | Claim with those receipts |
 | FIX-1–14 + ONNX ensure + wiring/judge demos | Shipped in **0.2.0** | Code-ready enterprise install |
 | Calibrated overlay | `cal-halueval-hash-0.1` validated-labeled | Marked row OK; MiniLM bake for ACI parity |
-| Moat wiring | Demo + INTEGRATION.md | Competitive when wired into runtime |
+| Moat wiring | Demo + INTEGRATION.md + **runtime suite** (`bench/runtime/`) | Competitive when wired into runtime; head-to-head vs LangGraph+HHEM / MiniLM |
 | vs LLM-judge (RAGAS / Blue) | Not measured | Do not claim |
+| vs LangGraph+encoder (runtime) | Suite ready (`bench/compose.runtime.yaml`) | Run ACI for marketing receipt |
 | PyPI publish | `0.2.0` ready to publish | Soft GA after pip publish |
 | 3-run median ACI | `run_bench.py --runs 3` ready; not re-run | Optional before big marketing |
 

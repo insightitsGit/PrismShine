@@ -46,3 +46,17 @@ docker compose -f bench/compose.yaml up --build -d
 
 `bench/stack/` is **internal ecosystem QA** (not a PrismShine public scoreboard).
 See `bench/stack/README.md`. Public claims use this comparative suite + `docs/BENCHMARKS.md`.
+
+## Runtime suite (ChorusGraph + PrismShine vs competitors)
+
+`bench/runtime/` — **no Guard**. ChorusGraph+PrismShine vs LangGraph+HHEM /
+MiniLM / **LettuceDetect** on H1 / R1 / P1. See [`bench/runtime/README.md`](runtime/README.md).
+
+Stack suite (`bench/stack/`) uses **[`prismguard>=0.1.8`](https://pypi.org/project/prismguard/0.1.8/)**
+for Guard→ChorusGraph→Shine QA (S1 included).
+
+```powershell
+docker compose -f bench/compose.runtime.yaml up --build -d
+python -m bench.runtime.run_runtime_bench `
+  --targets bench/runtime/targets.example.json --out bench/runtime/results/local
+```

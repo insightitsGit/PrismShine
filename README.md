@@ -3,13 +3,21 @@
 [![PyPI](https://img.shields.io/pypi/v/prismshine.svg)](https://pypi.org/project/prismshine/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-informational)](https://pypi.org/project/prismshine/)
+[![Version](https://img.shields.io/badge/version-0.2.1-informational)](https://pypi.org/project/prismshine/)
 
 **Anti-hallucination verdict engine — cause-side forensics + effect-side grounding in one auditable gate.**
 
 ```bash
-pip install "prismshine==0.2.0"
+pip install "prismshine==0.2.1"          # core — Tiers 0–2 (CPU, zero LLM)
 prismshine capabilities
+prismshine verify --demo                 # packaged sample — works after pip/git install
+```
+
+**Enterprise / run4-parity Tier-3 (span-level detection):** bare install leaves Tier-3 unavailable — fabricated-number gray zones resolve via `MISSING_CAPABILITY_FLAG` (honest degradation). For the full ONNX path that produced the HaluEval vs HHEM receipt:
+
+```bash
+pip install "prismshine[spans]"
+python -m prismshine.tools.ensure_span_onnx --export
 ```
 
 **Interactive demo:** [insightitsGit.github.io/PrismShine/demo.html](https://insightitsgit.github.io/PrismShine/demo.html) — terminal walkthrough (grounded pass → fabricated number block → empty-retrieval halt). No API key.
@@ -56,7 +64,10 @@ Both fuse into one **`ShineVerdict`**: `decision` + named `resolution_gate` + `e
 ## Quick start (30 seconds)
 
 ```bash
-pip install prismshine
+pip install prismshine                 # core path
+# Optional — full Tier-3 span classifier (same as public run4 receipt):
+# pip install "prismshine[spans]"
+# python -m prismshine.tools.ensure_span_onnx --export
 ```
 
 ```python
@@ -82,7 +93,7 @@ print(gate.capabilities())
 
 ```bash
 prismshine capabilities
-prismshine verify path/to/bundle.json --profile default
+prismshine verify --demo
 prismshine bench --suite all --report benchmarks/reports
 ```
 
@@ -241,7 +252,7 @@ pip install "prismshine[dev]"          # pytest + ruff
 
 ### Production checklist
 
-1. **Tier-3 ONNX** (~1 GB, not in the wheel):
+1. **Tier-3 ONNX (required for run4-parity span detection):** bare `pip install prismshine` does **not** ship Tier-3 — gray / fabricated-number paths may surface `MISSING_CAPABILITY_FLAG` until you install the extra and export weights (~1 GB, not in the wheel):
 
    ```bash
    pip install "prismshine[spans]"
@@ -271,8 +282,9 @@ pip install "prismshine[dev]"          # pytest + ruff
 
 ```bash
 prismshine capabilities [--profile default|clinical|finance|legal]
-prismshine verify bundle.json --profile default
-prismshine feedback bundle.json --label hallucination --out feedback.jsonl
+prismshine verify --demo
+prismshine verify examples/sample_bundle.json --profile default
+prismshine feedback examples/sample_bundle.json --label grounded --out feedback.jsonl
 prismshine calibrate ./samples --mode synthetic --profile clinical --out cal.yaml
 prismshine bench --suite all|cause|grounding|latency|consistency --report benchmarks/reports
 ```
@@ -359,15 +371,16 @@ prismshine bench --suite all --report benchmarks/reports
 pip install build twine
 python -m build
 twine check dist/*
-# twine upload dist/*    # after tag v0.2.0 — requires PyPI credentials
+# twine upload dist/*    # after tag v0.2.1 — requires PyPI credentials
 ```
 
-Git: commit on `main`, tag `v0.2.0`, push tag when ready. **Do not force-push `main`.**
+Git: commit on `main`, tag `v0.2.1`, push tag when ready. **Do not force-push `main`.**
 
 ---
 
 ## Status
 
+**0.2.1** — packaging hygiene (lean sdist) + install honesty for Tier-3 `[spans]`.  
 **0.2.0** — enterprise-ready open source for the self-hosted fast verifier lane (HaluEval vs HHEM receipt + FIX hardening). Category-creator / beats-LLM-judge claims still need production wiring receipts and a fair judge comparator row.
 
 License: Apache-2.0 · Author: Insight IT Solutions LLC · PyPI: [prismshine](https://pypi.org/project/prismshine/) · GitHub: [insightitsGit/PrismShine](https://github.com/insightitsGit/PrismShine)

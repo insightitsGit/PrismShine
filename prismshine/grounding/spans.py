@@ -184,7 +184,9 @@ class SpanClassifier:
                 self._load_error = (
                     "no ONNX LettuceDetect artifact on hub; using lexical Tier-3 backend"
                 )
-                logger.warning(self._load_error)
+                # Expected path without ensure_span_onnx — info, not warning
+                # (stderr warnings make Windows / enterprise probes look "failed").
+                logger.info(self._load_error)
                 return True
 
             self._load_error = "no ONNX span model available"

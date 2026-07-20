@@ -1,0 +1,6 @@
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic>=2.6
+lettucedetect==0.2.2
+torch==2.5.1
+transformers==4.47.1

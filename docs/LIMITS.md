@@ -77,4 +77,13 @@ The default matrix in DESIGN §5.5 ships as **v0 proposals**. Use `prismshine ca
 
 - `onnx` — LettuceDetect-class model loaded
 - `lexical` — deterministic token-absence detector (degraded; gray unresolved still cannot PASS)
-- `unavailable` — `[spans]` missing; gray → flag (ADR-11)
+- `unavailable` — `[spans]` missing; gray → flag (`MISSING_CAPABILITY_FLAG`, ADR-11)
+
+**Install path for run4-parity span detection:**
+
+```bash
+pip install "prismshine[spans]"
+python -m prismshine.tools.ensure_span_onnx --export
+```
+
+Bare `pip install prismshine` is intentional and honest — Tier-3 stays off until the extra + ONNX artifact are present.

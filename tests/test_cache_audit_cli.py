@@ -80,3 +80,35 @@ def test_cli_verify(tmp_path: Path):
     )
     # may return 0 or 1 depending on decision
     assert main(["verify", str(p)]) in {0, 1}
+
+
+def test_cli_verify_utf8_bom(tmp_path: Path):
+    """Windows PowerShell Set-Content -Encoding utf8 writes a BOM — must not crash."""
+    p = tmp_path / "bom.json"
+    payload = {
+        "question": "q",
+        "answer": "Revenue was $1000.",
+        "preload": [{"text": "Revenue was $1000.", "chunk_id": "1"}],
+    }
+    p.write_text(json.dumps(payload), encoding="utf-8-sig")
+    assert main(["verify", str(p)]) in {0, 1}
+
+
+def test_cli_verify_missing_file(tmp_path: Path):
+    assert main(["verify", str(tmp_path / "missing.json")]) == 2
+
+
+def test_cli_verify_bad_json(tmp_path: Path):
+    p = tmp_path / "bad.json"
+    p.write_text("{not-json", encoding="utf-8")
+    assert main(["verify", str(p)]) == 2
+
+
+def test_cli_verify_demo():
+    assert main(["verify", "--demo"]) in {0, 1}
+
+
+def test_cli_sample_bundle():
+    sample = Path(__file__).resolve().parents[1] / "examples" / "sample_bundle.json"
+    assert sample.is_file()
+    assert main(["verify", str(sample)]) in {0, 1}

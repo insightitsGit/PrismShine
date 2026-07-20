@@ -40,9 +40,10 @@ Thumbs.db
 # Model / data caches (ONNX baked into ACI via local acr build context only — not git)
 .cache/
 models/
-bench/shims/prismshine/baked/*.onnx
-bench/shims/prismshine/baked/*.onnx.data
+bench/shims/prismshine/baked/
+bench/runner/data/
 *.onnx
+*.onnx.data
 *.db
 *.sqlite
 *.sqlite3
@@ -61,3 +62,4 @@ bench/runner/targets*.json
 
 # Stack suite raw traces (keep scoreboard/summary in progress/)
 bench/stack/results/**/raw_*.jsonl
+bench/runtime/results/**/raw_*.jsonl

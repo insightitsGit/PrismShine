@@ -1,0 +1,27 @@
+# Runtime suite: ChorusGraph+PrismShine vs 3 LangGraph-shaped competitors.
+# No PrismGuard here. Build chorus-shine from repository root.
+# Stack suite (insight-stack) pins prismguard>=0.1.8 separately.
+services:
+  chorus-shine:
+    build: { context: .., dockerfile: shims/chorus-shine/Dockerfile }
+    ports: ["8201:8000"]
+    cpus: 2
+    mem_limit: 4g
+
+  oss-langgraph-hhem:
+    build: { context: shims/oss-langgraph-hhem }
+    ports: ["8202:8000"]
+    cpus: 2
+    mem_limit: 6g
+
+  oss-langgraph-minilm:
+    build: { context: shims/oss-langgraph-minilm }
+    ports: ["8203:8000"]
+    cpus: 2
+    mem_limit: 4g
+
+  oss-langgraph-lettuce:
+    build: { context: shims/oss-langgraph-lettuce }
+    ports: ["8204:8000"]
+    cpus: 2
+    mem_limit: 6g
