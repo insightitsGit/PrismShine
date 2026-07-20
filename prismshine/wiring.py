@@ -14,8 +14,10 @@ ChorusGraph is a convenience plugin over this contract, not a hard dependency.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, Mapping
+import weakref
 
 from prismshine.actions import actions_for_verdict
 from prismshine.evidence.builder import bundle_from_dict
@@ -428,7 +430,9 @@ def shine_verify_node(
     return _node
 
 
-_WIRED: dict[int, dict[str, bool]] = {}
+_WIRED: weakref.WeakKeyDictionary[Any, dict[str, bool]] = weakref.WeakKeyDictionary()
+_UNHASHABLE_WIRED: OrderedDict[int, dict[str, bool]] = OrderedDict()
+_UNHASHABLE_WIRED_MAX = 64
 
 
 class ShineNotWiredError(RuntimeError):
@@ -442,22 +446,39 @@ def mark_shine_wired(
     node: bool = False,
 ) -> None:
     """Mark that Shine is attached (interceptor and/or post-gen node)."""
-    key = id(target) if target is not None else 0
-    cur = _WIRED.get(key, {"interceptor": False, "node": False})
+    if target is None:
+        return
+    try:
+        cur = dict(getattr(target, "_prismshine_attached", None) or {})
+    except Exception:  # noqa: BLE001
+        cur = {}
     if interceptor:
         cur["interceptor"] = True
     if node:
         cur["node"] = True
-    _WIRED[key] = cur
-    if target is not None:
-        try:
-            setattr(target, "_prismshine_attached", dict(cur))
-        except Exception:  # noqa: BLE001
-            pass
+    try:
+        setattr(target, "_prismshine_attached", dict(cur))
+    except Exception:  # noqa: BLE001
+        key = id(target)
+        _UNHASHABLE_WIRED[key] = dict(cur)
+        while len(_UNHASHABLE_WIRED) > _UNHASHABLE_WIRED_MAX:
+            _UNHASHABLE_WIRED.popitem(last=False)
+    try:
+        _WIRED[target] = dict(cur)
+    except TypeError:
+        pass
 
 
 def is_shine_wired(target: Any) -> bool:
-    meta = getattr(target, "_prismshine_attached", None) or _WIRED.get(id(target), {})
+    if target is None:
+        return False
+    meta = getattr(target, "_prismshine_attached", None)
+    if meta:
+        return bool(meta.get("interceptor") or meta.get("node"))
+    try:
+        meta = _WIRED.get(target, {})
+    except TypeError:
+        meta = _UNHASHABLE_WIRED.get(id(target), {})
     return bool(meta.get("interceptor") or meta.get("node"))
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,7 @@ class ShineGate:
         calibration_version: str = "identity-0",
         calibration_curves: dict[str, list[tuple[float, float]]] | None = None,
         buffered_display: bool = True,
+        overrides: dict[str, Any] | None = None,
     ) -> None:
         self.handbook = handbook
         self.policy = policy
@@ -90,9 +92,11 @@ class ShineGate:
         self.calibration_version = calibration_version
         self.calibration_curves = calibration_curves or {}
         self.buffered_display = buffered_display
+        self._overrides = overrides or {}
         self.audit = AuditLog()
         self.budget = EscalationBudget(policy.tier4_budget)
-        self._tier0_cache: dict[str, Any] = {}
+        self._tier0_cache: OrderedDict[str, Any] = OrderedDict()
+        self._tier0_cache_maxsize = 256
         self._caps = self._detect_capabilities()
         logger.info("ShineGate capabilities: %s", self._caps.as_dict())
 
@@ -165,6 +169,7 @@ class ShineGate:
             verdict_store=store,
             config=cfg,
             buffered_display=buffered_display,
+            overrides=overrides or {},
         )
         # Product path: load calibrate() overlay (env or explicit path)
         cal_path = calibration_path or os.environ.get("PRISMSHINE_CALIBRATION")
@@ -291,38 +296,30 @@ class ShineGate:
             state_hash=state_hash,
         )
 
+    def _tier0_cache_get(self, preload_key: str) -> Any | None:
+        hit = self._tier0_cache.get(preload_key)
+        if hit is not None:
+            self._tier0_cache.move_to_end(preload_key)
+        return hit
+
+    def _tier0_cache_put(self, preload_key: str, forensics: Any) -> None:
+        self._tier0_cache[preload_key] = forensics
+        self._tier0_cache.move_to_end(preload_key)
+        while len(self._tier0_cache) > self._tier0_cache_maxsize:
+            self._tier0_cache.popitem(last=False)
+
     def verify(self, bundle: EvidenceBundle) -> ShineVerdict:
         key = self._cache_key(bundle)
         cached = self.verdict_store.get(key)
         if cached is not None:
             return cached
 
+        # Count every verify toward tier-4 budget (verdict cache misses only).
+        self.budget.observe()
+
         ehash = evidence_hash(bundle)
-        # Dynamic strictness bump
-        dynamic = 0
-        pre_forensics = run_forensics(bundle, self.handbook)
-        if any(h.id == "GUARD_GRAY_INPUT" for h in pre_forensics.hits):
-            dynamic += 1
-        phase = bundle.node_state.get("resonance_phase") or bundle.node_state.get("phase")
-        if str(phase).upper() in {"EMERGENCY", "ALERT"}:
-            dynamic += 1
-        policy = resolve_policy(
-            profile=self.policy.profile,
-            strictness=self.policy.strictness,
-            overrides=self.policy.extras or None,
-            dynamic_bump=dynamic,
-            halt_on_fatal=self.policy.halt_on_fatal,
-        )
-        # carry weights
-        policy.weights = dict(self.policy.weights)
 
-        signals: list[Signal] = []
-        spans = []
-        tier_reached = 0
-        coverage_mode = "skipped"
-
-        # --- Tier 0 ---
-        # Reuse cached tier0 by evidence hash of preload-only view
+        # --- Tier 0 --- (LRU cache before run_forensics)
         preload_key = content_hash(
             {
                 "q": bundle.question,
@@ -331,11 +328,31 @@ class ShineGate:
                 "state": bundle.node_state,
             }
         )
-        if preload_key in self._tier0_cache:
-            forensics = self._tier0_cache[preload_key]
-        else:
-            forensics = pre_forensics
-            self._tier0_cache[preload_key] = forensics
+        forensics = self._tier0_cache_get(preload_key)
+        if forensics is None:
+            forensics = run_forensics(bundle, self.handbook)
+            self._tier0_cache_put(preload_key, forensics)
+
+        # Dynamic strictness bump (reuse cached forensics for GUARD_GRAY_INPUT)
+        dynamic = 0
+        if any(h.id == "GUARD_GRAY_INPUT" for h in forensics.hits):
+            dynamic += 1
+        phase = bundle.node_state.get("resonance_phase") or bundle.node_state.get("phase")
+        if str(phase).upper() in {"EMERGENCY", "ALERT"}:
+            dynamic += 1
+        policy = resolve_policy(
+            profile=self.policy.profile,
+            strictness=self.policy.strictness,
+            overrides=self._overrides or None,
+            dynamic_bump=dynamic,
+            halt_on_fatal=self.policy.halt_on_fatal,
+        )
+
+        signals: list[Signal] = []
+        spans = []
+        tier_reached = 0
+        coverage_mode = "skipped"
+
         signals.extend(forensics.signals)
         tier_reached = 0
 

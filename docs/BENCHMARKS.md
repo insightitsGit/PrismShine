@@ -172,26 +172,27 @@ reported honestly via the track split below.
    `tests/test_action_matrix.py` scenario shapes for the B3 injector.
 4. Full B1–B4 pass ≈ 2–3 h on a 16-core box (RAGAS/Ollama dominates).
 
-### Measured results — 2026-07-19, Azure ACI (first real run)
+### Measured results — 2026-07-20, Azure ACI (v4 + ONNX) — **current headline**
 
-Receipts: [`benchmarks/progress/2026-07-19_comparative_aci/`](../benchmarks/progress/2026-07-19_comparative_aci/README.md)
-(environment, gate check, caveats). Data: HaluEval QA + summarization; PrismShine
-`default` profile, **uncalibrated**, lexical Tier-3 fallback, Tier-4 off.
+Receipts: [`benchmarks/progress/2026-07-20_run4_onnx/`](../benchmarks/progress/2026-07-20_run4_onnx/README.md).
+Data: HaluEval QA + summarization; PrismShine `default`, identity calibration placeholder,
+`span_backend=onnx`, Tier-4 off. Image `bench/prismshine:v4`.
 
 | system | track | n | F1 | precision | recall | AUROC | p50 ms | LLM calls |
 |---|---|---|---|---|---|---|---|---|
-| prismshine-fast | B1 QA | 200 | 0.719 | 0.896 | 0.60 | **0.838** | **30** | 0 |
-| hhem | B1 QA | 200 | **0.746** | 0.857 | 0.66 | 0.793 | 169 | 0 |
-| prismshine-fast | B2 numbers | 50 | **1.000** | 1.000 | 1.000 | 1.000 | **14** | 0 |
-| hhem | B2 numbers | 50 | 0.926 | 0.862 | 1.000 | 1.000 | 135 | 0 |
-| prismshine-fast | Bsum | 50 | **0.565** | 0.619 | 0.52 | 0.585 | **134** | 0 |
-| hhem | Bsum | 50 | 0.474 | 0.692 | 0.36 | 0.616 | 2101 | 0 |
+| prismshine-fast | B1 QA | 200 | **0.831** | 0.916 | 0.76 | **0.843** | **90** | 0 |
+| hhem | B1 QA | 200 | 0.746 | 0.857 | 0.66 | 0.793 | 216 | 0 |
+| prismshine-fast | B2 numbers | 50 | **1.000** | 1.000 | 1.000 | 1.000 | **20** | 0 |
+| hhem | B2 numbers | 50 | 0.926 | 0.862 | 1.000 | 1.000 | 166 | 0 |
+| prismshine-fast | Bsum | 50 | **0.600** | 0.600 | 0.60 | 0.562 | 1398 | 0 |
+| hhem | Bsum | 50 | 0.474 | 0.692 | 0.36 | 0.616 | 1899 | 0 |
 
-Highlights: B2 perfect (hard-fact floor differentiator, zero false positives);
-B1 within 2.7 F1 pts of HHEM at 0.18× its latency with higher AUROC; Bsum weak for
-both (needs ONNX Tier-3 / Tier-4). No RAGAS row: the pinned CPU judge measured
-~8 tok/s on ACI — zero completions in 85 min even on a 10-sample subset. A fair
-RAGAS row needs a GPU judge or hosted API (breaks $0-reproducibility; see receipt).
+Gate check: B2 F1 ≥ 0.99 + zero FP **pass**; B1 within 5 F1 of HHEM **pass** (ahead by ~8.5);
+B1 p50 ≤ ½ HHEM **pass** (90 vs 216). Bsum still weak in absolute terms for both systems.
+
+Prior containment-only run (2026-07-19, lexical Tier-3): see
+[`2026-07-19_comparative_aci/`](../benchmarks/progress/2026-07-19_comparative_aci/README.md)
+(B1 Shine 0.719 vs HHEM 0.746). No RAGAS row yet (CPU judge too slow on ACI).
 
 ## Competitive advantages these suites support
 

@@ -47,7 +47,7 @@ def fuse(
 ) -> FusionResult:
     if early_gate:
         decision: Decision = "block"
-        if "REGENERATE" in early_gate or early_gate.endswith(":REGENERATE"):
+        if "REGENERATE" in early_gate:
             decision = "regenerate"
         sev = next((s.severity for s in signatures if s.severity == "fatal"), None)
         if sev == "fatal":
@@ -93,16 +93,15 @@ def fuse(
     t2 = by_name.get("grounding.risk_coverage")
     cue = by_name.get("grounding.contradiction_cue")
 
+    # Deterministic tiers always contribute; judge adds on top (never washes cues).
+    if t2:
+        contrib += w["t2"] * _calibrate(t2.value, calib.get(t2.name))
+    if cue:
+        contrib += w["contradiction"] * _calibrate(cue.value, calib.get(cue.name))
+    if t3:
+        contrib += w["t3"] * _calibrate(t3.value, calib.get(t3.name))
     if t4 is not None and judge_present:
         contrib += w["t4"] * _calibrate(t4.value, calib.get(t4.name))
-    else:
-        if t2:
-            contrib += w["t2"] * _calibrate(t2.value, calib.get(t2.name))
-        if cue:
-            # unresolved contradiction cues
-            contrib += w["contradiction"] * _calibrate(cue.value, calib.get(cue.name))
-        if t3:
-            contrib += w["t3"] * _calibrate(t3.value, calib.get(t3.name))
 
     fused = max(0.0, min(1.0, contrib))
     b_pass, b_gray, b_act = policy.bands
@@ -112,7 +111,7 @@ def fuse(
         gate = "FUSION_PASS"
         band = "pass"
     elif fused < b_gray:
-        decision = "flag" if gray_unresolved else "flag"
+        decision = "flag"
         gate = "FUSION_GRAY"
         band = "gray"
     elif fused < b_act:

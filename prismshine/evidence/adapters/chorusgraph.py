@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from prismshine.evidence.builder import bundle_from_dict
 from prismshine.models import EvidenceBundle
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_kind(raw: str | None) -> str:
@@ -105,12 +108,18 @@ def bundle_from_chorusgraph(
     if stack is not None and chunk_ids and hasattr(stack, "get_chunk_vectors"):
         try:
             records = stack.get_chunk_vectors(chunk_ids, partition=partition)
-            by_id = {getattr(r, "chunk_id", None): r for r in records}
-            for p in preload:
-                rec = by_id.get(p["chunk_id"])
-                if rec is None:
-                    continue
-                vec = getattr(rec, "vector_384", None) or getattr(rec, "vector", None)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("get_chunk_vectors failed: %s", exc)
+            records = []
+        by_id = {getattr(r, "chunk_id", None): r for r in records}
+        for p in preload:
+            rec = by_id.get(p["chunk_id"])
+            if rec is None:
+                continue
+            try:
+                vec = getattr(rec, "vector_384", None)
+                if vec is None:
+                    vec = getattr(rec, "vector", None)
                 if vec is not None:
                     p["vector"] = list(vec)
                     art = getattr(rec, "encoder_artifact_id", None)
@@ -121,8 +130,12 @@ def bundle_from_chorusgraph(
                     p["metadata"]["version"] = getattr(rec, "version", None)
                     if art:
                         p["metadata"]["encoder_artifact_id"] = art
-        except Exception:  # noqa: BLE001
-            pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "warm-index vector injection failed for chunk %s: %s",
+                    p.get("chunk_id"),
+                    exc,
+                )
 
     if not preload:
         preload = [{"chunk_id": "empty", "text": "(no preload)", "source": "system"}]

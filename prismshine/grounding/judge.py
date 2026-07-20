@@ -5,11 +5,15 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
+
+_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL | re.IGNORECASE)
 
 
 @dataclass
@@ -23,34 +27,61 @@ class Judge(Protocol):
     def __call__(self, claims: list[str], context: str) -> JudgeResult: ...
 
 
-class EscalationBudget:
-    """Hard-cap judge traffic fraction."""
+def parse_judge_json(text: str) -> dict[str, Any]:
+    """Parse judge completion, stripping markdown JSON fences when present."""
+    stripped = (text or "").strip()
+    m = _FENCE_RE.match(stripped)
+    if m:
+        stripped = m.group(1).strip()
+    elif stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        stripped = "\n".join(lines).strip()
+    return json.loads(stripped)
 
-    def __init__(self, budget: float = 0.10) -> None:
+
+class EscalationBudget:
+    """Hard-cap judge traffic fraction over a sliding verify window."""
+
+    def __init__(self, budget: float = 0.10, window: int = 100) -> None:
         self.budget = budget
-        self._total = 0
-        self._escalated = 0
+        self._window_size = window
+        self._events: list[bool] = []
         self._lock = threading.Lock()
+
+    def observe(self) -> None:
+        """Record one verify (non-escalated until allow() flips the last slot)."""
+        with self._lock:
+            self._events.append(False)
+            if len(self._events) > self._window_size:
+                self._events.pop(0)
 
     def allow(self) -> bool:
         with self._lock:
-            self._total += 1
-            rate = self._escalated / self._total
-            if rate >= self.budget and self._total > 10:
+            if not self._events:
+                return True
+            escalated = sum(1 for x in self._events if x)
+            total = len(self._events)
+            if total > 10 and escalated / total >= self.budget:
                 return False
-            self._escalated += 1
+            self._events[-1] = True
             return True
 
     @property
     def rate(self) -> float:
         with self._lock:
-            return self._escalated / max(self._total, 1)
+            escalated = sum(1 for x in self._events if x)
+            return escalated / max(len(self._events), 1)
 
 
 class CachedJudge:
-    def __init__(self, inner: Judge) -> None:
+    def __init__(self, inner: Judge, maxsize: int = 1000) -> None:
         self.inner = inner
-        self._cache: dict[str, JudgeResult] = {}
+        self._maxsize = maxsize
+        self._cache: OrderedDict[str, JudgeResult] = OrderedDict()
         self._lock = threading.Lock()
 
     def __call__(self, claims: list[str], context: str) -> JudgeResult:
@@ -59,10 +90,14 @@ class CachedJudge:
         ).hexdigest()
         with self._lock:
             if key in self._cache:
+                self._cache.move_to_end(key)
                 return self._cache[key]
         result = self.inner(claims, context)
         with self._lock:
             self._cache[key] = result
+            self._cache.move_to_end(key)
+            while len(self._cache) > self._maxsize:
+                self._cache.popitem(last=False)
         return result
 
 
@@ -89,10 +124,11 @@ class OpenAIJudge:
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
+            response_format={"type": "json_object"},
         )
         text = resp.choices[0].message.content or "{}"
         try:
-            data = json.loads(text)
+            data = parse_judge_json(text)
         except json.JSONDecodeError:
             data = {"overall_risk": 0.5, "claims": [], "raw_text": text}
         return JudgeResult(
@@ -121,7 +157,7 @@ class GeminiJudge:
         resp = client.models.generate_content(model=self.model, contents=prompt)
         text = getattr(resp, "text", None) or str(resp)
         try:
-            data = json.loads(text)
+            data = parse_judge_json(text)
         except json.JSONDecodeError:
             data = {"overall_risk": 0.5, "claims": [], "raw_text": text}
         return JudgeResult(

@@ -44,4 +44,20 @@ Market context: a 2026 public benchmark (PlaceboBench) measured six major tools 
 
 Run all receipts: `prismshine bench --suite all --report benchmarks/reports` (details in [`docs/BENCHMARKS.md`](BENCHMARKS.md)).
 
-**First comparative receipt (2026-07-19, Azure ACI, vs HHEM-2.1-Open):** B2 fabricated-numbers F1 1.000 (HHEM 0.926), B1 QA within 2.7 F1 pts of HHEM at 0.18× its p50 latency with higher AUROC (0.838 vs 0.793), zero LLM calls — uncalibrated, lexical Tier-3. Details: [`benchmarks/progress/2026-07-19_comparative_aci/`](../benchmarks/progress/2026-07-19_comparative_aci/README.md).
+**Latest comparative receipt (2026-07-20, Azure ACI v4 + ONNX Tier-3, vs HHEM-2.1-Open):** B1 QA F1 **0.831** (HHEM 0.746), B2 fabricated-numbers F1 **1.000 / 0 FP** (HHEM 0.926), Bsum F1 0.600 (HHEM 0.474), B1 p50 90 ms vs 216 ms, zero LLM calls, `span_backend=onnx`. Details: [`benchmarks/progress/2026-07-20_run4_onnx/`](../benchmarks/progress/2026-07-20_run4_onnx/README.md). In-process suites (cause/grounding/latency/consistency) **PASS** under `benchmarks/reports/` after v0.2.0.
+
+### Go-live readiness (enterprise open-source pip) — v0.2.0
+
+| Layer | Status | Verdict |
+|---|---|---|
+| Effect-side vs HHEM (HaluEval B1/B2) | Ahead on F1 + latency; B2 gate green | Competitive fast grounding checker |
+| Cost story (0 LLM on default) | Proven on ACI | Claim with receipt |
+| Cause / consistency / latency receipts | **PASS** in `benchmarks/reports/` | Claim with those receipts |
+| FIX-1–14 + ONNX ensure + wiring/judge demos | Shipped in **0.2.0** | Code-ready enterprise install |
+| Calibrated overlay | `cal-halueval-hash-0.1` validated-labeled | Marked row OK; MiniLM bake for ACI parity |
+| Moat wiring | Demo + INTEGRATION.md | Competitive when wired into runtime |
+| vs LLM-judge (RAGAS / Blue) | Not measured | Do not claim |
+| PyPI publish | `0.2.0` ready to publish | Soft GA after pip publish |
+| 3-run median ACI | `run_bench.py --runs 3` ready; not re-run | Optional before big marketing |
+
+**Bottom line:** **v0.2.0 is enterprise-ready open source** for the self-hosted verifier lane. Category-creator / beats-judges claims still need production wiring, optional 3-run ACI median, and a fair judge comparator.

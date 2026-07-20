@@ -59,18 +59,22 @@ class AuditLog:
     def hri(self) -> float:
         """Hallucination Risk Index 0–100."""
         with self._lock:
-            if not self._fused_window:
-                return 0.0
-            avg_fused = sum(self._fused_window) / len(self._fused_window)
-            esc_rate = self._escalations / max(self._total, 1)
-            top_sig = max(self._sig_counts.values()) / max(self._total, 1) if self._sig_counts else 0.0
-            score = 100.0 * (0.6 * avg_fused + 0.25 * esc_rate + 0.15 * top_sig)
-            return max(0.0, min(100.0, score))
+            return self._hri_unlocked()
+
+    def _hri_unlocked(self) -> float:
+        if not self._fused_window:
+            return 0.0
+        avg_fused = sum(self._fused_window) / len(self._fused_window)
+        esc_rate = self._escalations / max(self._total, 1)
+        top_sig = max(self._sig_counts.values()) / max(self._total, 1) if self._sig_counts else 0.0
+        score = 100.0 * (0.6 * avg_fused + 0.25 * esc_rate + 0.15 * top_sig)
+        return max(0.0, min(100.0, score))
 
     def metrics(self) -> dict[str, Any]:
-        return {
-            "hri": self.hri(),
-            "total": self._total,
-            "escalations": self._escalations,
-            "signature_counts": dict(self._sig_counts),
-        }
+        with self._lock:
+            return {
+                "hri": self._hri_unlocked(),
+                "total": self._total,
+                "escalations": self._escalations,
+                "signature_counts": dict(self._sig_counts),
+            }

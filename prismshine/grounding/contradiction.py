@@ -96,6 +96,15 @@ OPPOSITE_PAIRS: list[tuple[str, str]] = [
     ("supported", "opposed"),
 ]
 
+_OPPOSITE_PATTERNS: list[tuple[re.Pattern[str], re.Pattern[str], str]] = [
+    (
+        re.compile(rf"\b{re.escape(x)}\b", re.IGNORECASE),
+        re.compile(rf"\b{re.escape(y)}\b", re.IGNORECASE),
+        f"opposite:{x}/{y}",
+    )
+    for x, y in OPPOSITE_PAIRS
+]
+
 # Explicit polarity phrase pairs (answer vs preload)
 POLARITY_PHRASE_PAIRS: list[tuple[str, str]] = [
     ("is safe", "is not safe"),
@@ -136,11 +145,12 @@ def _polarity_phrase_hit(a: str, b: str) -> str | None:
     return None
 
 
-def _opposite_hit(a: str, b: str, pairs: list[tuple[str, str]]) -> str | None:
-    al, bl = a.lower(), b.lower()
-    for x, y in pairs:
-        if (x in al and y in bl) or (y in al and x in bl):
-            return f"opposite:{x}/{y}"
+def _opposite_word_hit(a: str, b: str) -> str | None:
+    for px, py, label in _OPPOSITE_PATTERNS:
+        if px.search(a) and py.search(b):
+            return label
+        if py.search(a) and px.search(b):
+            return label
     return None
 
 
@@ -155,9 +165,16 @@ def screen_contradictions(
     For each sentence that has a best-supporting chunk, detect negation
     asymmetry, polarity phrases, or opposite-verb/adjective cues.
     """
-    pairs = list(OPPOSITE_PAIRS)
+    extra_patterns: list[tuple[re.Pattern[str], re.Pattern[str], str]] = []
     if extra_pairs:
-        pairs.extend(extra_pairs)
+        extra_patterns = [
+            (
+                re.compile(rf"\b{re.escape(x)}\b", re.IGNORECASE),
+                re.compile(rf"\b{re.escape(y)}\b", re.IGNORECASE),
+                f"opposite:{x}/{y}",
+            )
+            for x, y in extra_pairs
+        ]
     cues: list[ContradictionCue] = []
     for i, sent in enumerate(sentences):
         if i >= len(best_chunk_texts):
@@ -173,7 +190,15 @@ def screen_contradictions(
         else:
             reason = _polarity_phrase_hit(sent, chunk_text)
             if reason is None:
-                reason = _opposite_hit(sent, chunk_text, pairs)
+                reason = _opposite_word_hit(sent, chunk_text)
+                if reason is None and extra_patterns:
+                    for px, py, label in extra_patterns:
+                        if px.search(sent) and py.search(chunk_text):
+                            reason = label
+                            break
+                        if py.search(sent) and px.search(chunk_text):
+                            reason = label
+                            break
         if reason:
             if sentence_offsets and i < len(sentence_offsets):
                 start, end = sentence_offsets[i]

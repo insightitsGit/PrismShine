@@ -158,7 +158,6 @@ def shine_node(
             fb = out.get("shine_repair_feedback") or {}
             fb["target"] = regenerate_target
             out["shine_repair_feedback"] = fb
-        _mark_attached(compiled or state, node=True)
         return out
 
     # Mark factory as shine node for require_shine introspection

@@ -70,6 +70,16 @@ pip install -e ".[dev]"
 
 Any runtime (LangGraph / custom) gets the same Shine features as ChorusGraph via `prismshine.wiring` — see `docs/INTEGRATION.md` §8.
 
+### Enterprise / production checklist
+
+1. **Tier-3 ONNX** (not bundled in the wheel — ~1GB):  
+   `python -m prismshine.tools.ensure_span_onnx --export` then pin `PRISMSHINE_SPAN_ONNX` / `PRISMSHINE_SPAN_TOKENIZER`.
+2. **Domain calibration** (marked row, not the uncalibrated headline):  
+   `python -m prismshine.bench.calibrate_minilm --embedder minilm` (or `--embedder hash` offline) → `PRISMSHINE_CALIBRATION=...`.
+3. **Wiring moat** (cause-side halt + consistency): run `python examples/enterprise_wiring_demo.py`, then integrate via `docs/INTEGRATION.md`.
+4. **Tier-4 judge** (opt-in): `pip install 'prismshine[judge-openai]'` + `ShineGate.build(judge="openai")` — see `examples/tier4_judge_demo.py`.
+5. **Receipts before claims**: `prismshine bench --suite all --report benchmarks/reports` and comparative `bench/runner/run_bench.py --runs 3` vs HHEM.
+
 ## Quick start
 
 ```python

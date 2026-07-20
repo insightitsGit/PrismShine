@@ -67,3 +67,9 @@
 **Decision:** Core install is numpy + pydantic + pyyaml only. Every sibling library (chorusgraph, prismcortex, prismlang, prismlib, prismresonance, prismguard) and every heavy dependency (onnxruntime, judge SDKs) is an optional extra. `ShineGate.build()` performs capability detection and assembles the pipeline from what exists; verdicts record what ran (`tier_reached`, `coverage_mode`, dormant detector families); missing deciders resolve gray zones to `flag`, never `pass`; and pluggable protocols (`Embedder`, `Judge`, `VerdictStore`) let developers substitute components they already have. Full degradation matrix: DESIGN.md §8.2.
 
 **Why:** PrismShine must be adoptable by any stack (LangGraph, custom runtimes) without buying into the Insight ecosystem first — the ecosystem should be the *upgrade path* (each sibling installed lights up more capability), not the entry fee. Transparent degradation preserves the audit-grade contract: a verdict from a minimal install is honest about being weaker, and absence of a capability can never manufacture a false PASS.
+
+## ADR-12: Judge fusion is monotone over deterministic evidence
+
+**Decision:** When a Tier-4 judge is present, fusion always includes Tier-2/3 deterministic contributions (coverage risk, contradiction cues, unsupported-span ratio) and adds judge risk on top. A judge returning low risk cannot zero out or reduce the fused score from a confirmed contradiction cue or other deterministic signal.
+
+**Why:** The prior branch skipped deterministic tiers whenever a judge ran, so a `risk=0.0` judge could wash strong contradiction cues out of `fused_score`, band, and gate naming even when the decision floor still flagged the answer. Monotone fusion keeps calibration, band assignment, and audit telemetry aligned with the deterministic evidence the pipeline already computed.

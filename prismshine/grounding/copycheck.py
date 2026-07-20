@@ -270,6 +270,16 @@ def _arithmetic_closure(fact: Fact, preload_nums: list[Fact]) -> bool:
         return False
     vals = [p for p in preload_nums if p.value is not None]
     n = len(vals)
+    is_currency = fact.kind == "currency" or fact.unit in {
+        "usd",
+        "eur",
+        "gbp",
+        "$",
+        "€",
+        "£",
+    }
+    is_percent = fact.unit in {"percent", "%"}
+    dimless = fact.kind == "number" and not is_currency and not is_percent
     for i in range(n):
         for j in range(n):
             if i == j:
@@ -279,12 +289,20 @@ def _arithmetic_closure(fact: Fact, preload_nums: list[Fact]) -> bool:
             if fact.unit and vals[i].unit and fact.unit != vals[i].unit:
                 if fact.unit not in {"percent", "%"}:
                     continue
-            candidates = [a + b, a - b, b - a, a * b]
-            if b != 0:
-                candidates.append(a / b)
-                candidates.append((a - b) / b * 100.0)  # percent change
-            if a != 0:
-                candidates.append(b / a)
+            if is_currency or is_percent:
+                candidates = [a + b, a - b, b - a]
+                if b != 0:
+                    candidates.append((a - b) / b * 100.0)
+            elif dimless:
+                candidates = [a + b, a - b, b - a, a * b]
+                if b != 0:
+                    candidates.append(a / b)
+                if a != 0:
+                    candidates.append(b / a)
+            else:
+                candidates = [a + b, a - b, b - a]
+                if b != 0:
+                    candidates.append((a - b) / b * 100.0)
             for c in candidates:
                 if abs(c - fact.value) <= max(1e-6, abs(fact.value) * 0.005):
                     return True
@@ -409,6 +427,7 @@ def copycheck(
 
     total_w = 0.0
     unmatched_w = 0.0
+    unmatched_ids = {id(f) for f in unmatched}
     scored_facts = answer_facts
     for fact in scored_facts:
         if fact.derived and not escalate_derived:
@@ -417,7 +436,7 @@ def copycheck(
         if structured and fact.kind in {"number", "currency", "id"}:
             w *= 1.25  # field-critical boost for structured answers
         total_w += w
-        if fact in unmatched or (fact.derived and escalate_derived):
+        if id(fact) in unmatched_ids or (fact.derived and escalate_derived):
             unmatched_w += w
 
     ratio = (unmatched_w / total_w) if total_w > 0 else 0.0

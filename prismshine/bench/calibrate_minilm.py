@@ -1,14 +1,17 @@
-"""Fit effect thresholds with the same MiniLM embedder the Azure shim uses.
+"""Fit effect thresholds for PRISMSHINE_CALIBRATION overlays.
 
-Produces a marked calibrated overlay for PRISMSHINE_CALIBRATION.
+  # Hash embedder (always works offline; marked as non-MiniLM)
+  python -m prismshine.bench.calibrate_minilm --embedder hash --n 80
 
-  python -m prismshine.bench.calibrate_minilm --n 100 --out benchmarks/calibration/halueval_minilm.json
+  # Same MiniLM the Azure shim uses (may crash on some Windows CPU builds)
+  python -m prismshine.bench.calibrate_minilm --embedder minilm --n 100
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -24,6 +27,7 @@ from prismshine.calibrate import (  # noqa: E402
     apply_overlay_to_gate,
     calibrate_labeled,
 )
+from prismshine.encoder import _hash_embed  # noqa: E402
 from prismshine.evidence.builder import bundle_from_dict  # noqa: E402
 from prismshine.gate import ShineGate  # noqa: E402
 from prismshine.grounding.splitter import split_sentences  # noqa: E402
@@ -31,12 +35,23 @@ from prismshine.grounding.splitter import split_sentences  # noqa: E402
 
 def _minilm():
     import numpy as np
+
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
 
     def embed(texts: list[str]):
         return np.asarray(model.encode(texts, normalize_embeddings=True), dtype=np.float64)
+
+    return embed
+
+
+def _hash_emb():
+    def embed(texts: list[str]):
+        return _hash_embed(texts, dim=64)
 
     return embed
 
@@ -72,6 +87,12 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--out", type=Path, default=Path("benchmarks/calibration/halueval_minilm.json"))
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument(
+        "--embedder",
+        choices=("minilm", "hash"),
+        default="hash",
+        help="minilm matches ACI shim; hash is crash-safe for CI/local Windows",
+    )
     args = ap.parse_args()
 
     cache = ROOT / "bench" / "runner" / "data"
@@ -81,14 +102,21 @@ def main() -> int:
     mid = len(samples) // 2
     train, test = _to_pairs(samples[:mid]), _to_pairs(samples[mid:])
 
-    print("loading MiniLM…")
-    emb = _minilm()
+    print(f"loading embedder={args.embedder}…")
+    try:
+        emb = _minilm() if args.embedder == "minilm" else _hash_emb()
+    except Exception as exc:  # noqa: BLE001
+        print(f"minilm failed ({exc}); falling back to hash", file=sys.stderr)
+        emb = _hash_emb()
+        args.embedder = "hash"
+
+    version = f"cal-halueval-{args.embedder}-0.1"
     gate = ShineGate.build(profile="default", embedder=emb)
     pre = _decision_f1(gate, test)
     report = calibrate_labeled(
         train,
         gate=gate,
-        version="cal-halueval-minilm-0.1",
+        version=version,
         apply_to_gate=True,
         fit_coverage=True,
         tau_sent_grid=[0.50, 0.55, 0.62, 0.68],
@@ -96,10 +124,15 @@ def main() -> int:
     )
     apply_overlay_to_gate(gate, report.to_yaml_overlay())
     post = _decision_f1(gate, test)
+    emb_name = (
+        "sentence-transformers/all-MiniLM-L6-v2"
+        if args.embedder == "minilm"
+        else "hash-embed-64"
+    )
     payload = {
-        "track": "B1-calibrated-minilm",
+        "track": f"B1-calibrated-{args.embedder}",
         "dataset": "HaluEval-QA",
-        "embedder": "sentence-transformers/all-MiniLM-L6-v2",
+        "embedder": emb_name,
         "n_train": len(train),
         "n_test": len(test),
         "pre_calibrate_f1_test": round(pre, 4),

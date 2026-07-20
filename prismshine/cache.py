@@ -74,8 +74,9 @@ class MemoryVerdictStore:
 
 
 class SqliteVerdictStore:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, max_rows: int | None = None) -> None:
         self.path = Path(path)
+        self.max_rows = max_rows
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         with self._connect() as conn:
@@ -114,6 +115,18 @@ class SqliteVerdictStore:
                     """,
                     (key, payload, time.time()),
                 )
+                if self.max_rows is not None:
+                    count = conn.execute("SELECT COUNT(*) FROM verdicts").fetchone()[0]
+                    if count > self.max_rows:
+                        excess = count - self.max_rows
+                        conn.execute(
+                            """
+                            DELETE FROM verdicts WHERE key IN (
+                                SELECT key FROM verdicts ORDER BY created_at ASC LIMIT ?
+                            )
+                            """,
+                            (excess,),
+                        )
                 conn.commit()
 
 

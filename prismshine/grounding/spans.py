@@ -74,7 +74,9 @@ class SpanClassifier:
         return self._backend
 
     def _ensure_loaded(self) -> bool:
-        if self._session is not None:
+        if self._backend == "onnx" and self._session is not None and self._tokenizer is not None:
+            return True
+        if self._backend == "lexical" and self._session == "lexical":
             return True
         if self._load_error and not self.allow_lexical_fallback:
             return False
@@ -93,9 +95,10 @@ class SpanClassifier:
             # Pinned local ONNX path (CI / air-gapped)
             if self._pinned_onnx and Path(self._pinned_onnx).is_file():
                 try:
-                    self._session = ort.InferenceSession(
+                    session = ort.InferenceSession(
                         self._pinned_onnx, providers=["CPUExecutionProvider"]
                     )
+                    tokenizer = None
                     tok_path = None
                     for candidate in (
                         self._pinned_tokenizer,
@@ -103,11 +106,10 @@ class SpanClassifier:
                         str(Path(self._pinned_onnx).parent / "tokenizer.json"),
                     ):
                         if candidate and Path(candidate).is_file():
-                            self._tokenizer = Tokenizer.from_file(str(candidate))
+                            tokenizer = Tokenizer.from_file(str(candidate))
                             tok_path = str(candidate)
                             break
-                    if tok_path is None:
-                        # Pull tokenizer from pinned/default hub model; keep local ONNX weights
+                    if tokenizer is None:
                         for repo in self.model_candidates:
                             try:
                                 tok_path = hf_hub_download(
@@ -115,11 +117,13 @@ class SpanClassifier:
                                     filename="tokenizer.json",
                                     cache_dir=str(self.cache_dir),
                                 )
-                                self._tokenizer = Tokenizer.from_file(tok_path)
+                                tokenizer = Tokenizer.from_file(tok_path)
                                 break
                             except Exception:  # noqa: BLE001
                                 continue
-                    if self._tokenizer is not None:
+                    if session is not None and tokenizer is not None:
+                        self._session = session
+                        self._tokenizer = tokenizer
                         self.artifact_id = f"pinned@{Path(self._pinned_onnx).name}"
                         self._backend = "onnx"
                         return True
@@ -160,10 +164,12 @@ class SpanClassifier:
                     except Exception:  # noqa: BLE001
                         continue
                 if onnx_path and tok_path:
-                    self._session = ort.InferenceSession(
+                    session = ort.InferenceSession(
                         onnx_path, providers=["CPUExecutionProvider"]
                     )
-                    self._tokenizer = Tokenizer.from_file(tok_path)
+                    tokenizer = Tokenizer.from_file(tok_path)
+                    self._session = session
+                    self._tokenizer = tokenizer
                     self.model_id = repo
                     self.artifact_id = f"{repo}@{Path(onnx_path).name}"
                     self._backend = "onnx"
@@ -213,7 +219,34 @@ class SpanClassifier:
         if self._session == "lexical":
             spans = self._lexical_unsupported(answer, preload, candidate_spans)
         else:
-            spans = self._onnx_unsupported(answer, preload, thr, candidate_spans)
+            try:
+                spans = self._onnx_unsupported(answer, preload, thr, candidate_spans)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ONNX classify failed (%s); degrading to lexical", exc)
+                if not self.allow_lexical_fallback:
+                    raise
+                spans = self._lexical_unsupported(answer, preload, candidate_spans)
+                self._backend = "lexical"
+
+        # Contradiction-cue candidates are mandatory Tier-3 evidence — never drop them
+        # when the ONNX path returns empty / non-overlapping spans.
+        if candidate_spans:
+            have = {(s.start, s.end, s.text) for s in spans}
+            for cand in candidate_spans:
+                if "contradiction" not in (cand.reason or ""):
+                    continue
+                key = (cand.start, cand.end, cand.text)
+                if key in have:
+                    continue
+                spans.append(
+                    Span(
+                        start=cand.start,
+                        end=cand.end,
+                        text=cand.text,
+                        reason="unsupported_span:contradiction_cue",
+                        tier=3,
+                    )
+                )
 
         unsupported_chars = sum(max(0, s.end - s.start) for s in spans)
         ratio = unsupported_chars / max(len(answer), 1)
@@ -293,6 +326,13 @@ class SpanClassifier:
                     )
         return spans
 
+    def _max_seq_tokens(self) -> int:
+        if self._tokenizer is not None and hasattr(self._tokenizer, "get_tokenizer"):
+            inner = self._tokenizer.get_tokenizer()
+            if hasattr(inner, "model_max_length") and inner.model_max_length:
+                return int(inner.model_max_length)
+        return 512
+
     def _onnx_unsupported(
         self,
         answer: str,
@@ -302,10 +342,20 @@ class SpanClassifier:
     ) -> list[Span]:
         import numpy as np
 
-        # Chunk preload to fit context window
-        max_chars = 6000
-        context = preload[:max_chars]
-        text = f"{context}\n\n{answer}"
+        max_tokens = self._max_seq_tokens()
+        sep = "\n\n"
+        sep_ids = self._tokenizer.encode(sep).ids
+        answer_ids = self._tokenizer.encode(answer).ids
+        budget = max_tokens - len(answer_ids) - len(sep_ids) - 2
+        if budget < 32:
+            budget = max(32, max_tokens // 2)
+            answer_ids = answer_ids[: max(1, max_tokens // 4)]
+            answer = self._tokenizer.decode(answer_ids)
+        ctx_ids = self._tokenizer.encode(preload).ids
+        if len(ctx_ids) > budget:
+            ctx_ids = ctx_ids[-budget:]
+        context = self._tokenizer.decode(ctx_ids) if ctx_ids else ""
+        text = f"{context}{sep}{answer}"
         encoded = self._tokenizer.encode(text)
         ids = encoded.ids
         # Run model — output shape assumed [seq, 2] or [1, seq, 2] logits/probs

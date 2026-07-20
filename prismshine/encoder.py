@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
@@ -42,7 +43,8 @@ class SharedEncoder:
         prefer_prismlang: bool = True,
     ) -> None:
         self._user_embedder = embedder
-        self._memo: dict[str, np.ndarray] = {}
+        self._memo: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._memo_maxsize = 10_000
         self._mode = "lexical"
         self._model_id: str | None = None
         self._session: Any = None
@@ -78,6 +80,18 @@ class SharedEncoder:
     def _sentence_key(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+    def _memo_get(self, key: str) -> np.ndarray | None:
+        hit = self._memo.get(key)
+        if hit is not None:
+            self._memo.move_to_end(key)
+        return hit
+
+    def _memo_put(self, key: str, vec: np.ndarray) -> None:
+        self._memo[key] = vec
+        self._memo.move_to_end(key)
+        while len(self._memo) > self._memo_maxsize:
+            self._memo.popitem(last=False)
+
     def encode(self, texts: list[str]) -> np.ndarray:
         if not texts:
             return np.zeros((0, 1), dtype=np.float64)
@@ -87,8 +101,9 @@ class SharedEncoder:
         missing_texts: list[str] = []
         for i, t in enumerate(texts):
             key = self._sentence_key(t)
-            if key in self._memo:
-                results[i] = self._memo[key]
+            cached = self._memo_get(key)
+            if cached is not None:
+                results[i] = cached
             else:
                 missing_idx.append(i)
                 missing_texts.append(t)
@@ -97,7 +112,7 @@ class SharedEncoder:
             encoded = self._encode_batch(missing_texts)
             for j, idx in enumerate(missing_idx):
                 vec = encoded[j]
-                self._memo[self._sentence_key(texts[idx])] = vec
+                self._memo_put(self._sentence_key(texts[idx]), vec)
                 results[idx] = vec
 
         return np.stack([r for r in results if r is not None], axis=0)
@@ -125,6 +140,7 @@ class SharedEncoder:
             except Exception as exc:  # noqa: BLE001
                 logger.debug("prismlang encode failed, lexical fallback: %s", exc)
                 self._mode = "lexical"
+                self._memo.clear()
 
         return _hash_embed(texts)
 
@@ -142,7 +158,7 @@ class SharedEncoder:
             if self._model_id and space == "raw-384":
                 space = f"raw-384@{self._model_id}"
             elif self._mode == "user-embedder":
-                space = "raw-384@user-embedder"
+                space = f"user@{len(vec)}d"
             bundle.preload[i] = chunk.model_copy(
                 update={
                     "vector": vec.astype(float).tolist(),

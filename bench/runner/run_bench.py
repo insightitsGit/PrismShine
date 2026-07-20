@@ -178,6 +178,26 @@ def run_system(name: str, url: str, samples: list[dict], out_dir: Path, timeout:
     return results
 
 
+def _median_entry(entries: list[dict]) -> dict:
+    """Median F1 / AUROC / latency across runs; keep last-run confusion counts."""
+    if len(entries) == 1:
+        return dict(entries[0])
+    out = dict(entries[len(entries) // 2])  # middle run's confusion matrix
+    for key in ("f1", "precision", "recall", "auroc", "accuracy"):
+        vals = [float(e[key]) for e in entries if key in e]
+        if vals:
+            out[key] = round(statistics.median(vals), 4)
+    for key in ("p50_ms", "p95_ms", "mean_ms"):
+        vals = [float(e[key]) for e in entries if key in e]
+        if vals:
+            out[key] = round(statistics.median(vals), 2)
+    out["runs"] = len(entries)
+    out["f1_per_run"] = [e["f1"] for e in entries]
+    out["llm_calls_total"] = int(statistics.median([e["llm_calls_total"] for e in entries]))
+    out["errors"] = int(statistics.median([e["errors"] for e in entries]))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--targets", required=True, help="JSON file {system: base_url}")
@@ -187,6 +207,12 @@ def main() -> int:
     ap.add_argument("--ragas-limit", type=int, default=30, help="max samples for ragas (slow judge)")
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--out", default="results/run")
+    ap.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Repeat suite N times with shifted seeds; report median F1/AUROC/latency",
+    )
     args = ap.parse_args()
 
     targets = json.loads(Path(args.targets).read_text(encoding="utf-8"))
@@ -194,13 +220,6 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     cache = Path(__file__).parent / "data"
 
-    rows = load_halueval(cache, args.n)
-    b1 = build_b1(rows)
-    b2 = build_b2(load_halueval(cache, 2000), args.b2)
-    bsum = build_bsum(cache, args.sum)
-    print(f"B1: {len(b1)} | B2: {len(b2)} | Bsum: {len(bsum)} | systems: {list(targets)}")
-
-    # health checks
     for name, url in targets.items():
         try:
             h = httpx.get(f"{url}/health", timeout=120).json()
@@ -208,35 +227,101 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"health {name}: FAILED {exc}")
 
-    summary: dict = {"created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                     "n_b1": len(b1), "n_b2": len(b2), "n_bsum": len(bsum), "systems": {}}
-    for name, url in targets.items():
-        for track, samples in (("B1", b1), ("B2", b2), ("Bsum", bsum)):
-            subset = samples[: 2 * args.ragas_limit] if name.startswith("ragas") else samples
-            print(f"== {name} / {track} ({len(subset)} samples) ==")
-            res = run_system(f"{name}_{track}", url, subset, out_dir, args.timeout)
-            entry = {"n": len(res), **prf1(res), "auroc": auroc(res), **latency_stats(res),
-                     "llm_calls_total": sum(int(r.get("llm_calls") or 0) for r in res),
-                     "errors": sum(1 for r in res if r.get("error"))}
-            summary["systems"].setdefault(name, {})[track] = entry
-            print(f"   {entry}")
+    summary: dict = {
+        "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "runs": args.runs,
+        "systems": {},
+    }
+    run_entries: dict[tuple[str, str], list[dict]] = {}
+
+    for run_i in range(args.runs):
+        seed = SEED + run_i
+        qa_rows = _load_jsonl(HALUEVAL_QA, cache / "halueval_qa.jsonl")
+        random.Random(seed).shuffle(qa_rows)
+        b1 = build_b1(qa_rows[: args.n])
+        b2_src = list(qa_rows)
+        random.Random(seed + 17).shuffle(b2_src)
+        b2 = build_b2(b2_src[:2000], args.b2)
+        sum_rows = _load_jsonl(HALUEVAL_SUM, cache / "halueval_sum.jsonl")
+        random.Random(seed).shuffle(sum_rows)
+        bsum = []
+        for i, row in enumerate(sum_rows[: args.sum]):
+            doc = row["document"][:6000]
+            q = "Summarize the document."
+            bsum.append(
+                {
+                    "id": f"bs-{i}-g",
+                    "track": "Bsum",
+                    "question": q,
+                    "context": [doc],
+                    "answer": row["right_summary"],
+                    "label": "grounded",
+                }
+            )
+            bsum.append(
+                {
+                    "id": f"bs-{i}-h",
+                    "track": "Bsum",
+                    "question": q,
+                    "context": [doc],
+                    "answer": row["hallucinated_summary"],
+                    "label": "hallucinated",
+                }
+            )
+        if run_i == 0:
+            summary["n_b1"] = len(b1)
+            summary["n_b2"] = len(b2)
+            summary["n_bsum"] = len(bsum)
+        print(
+            f"=== run {run_i + 1}/{args.runs} seed={seed} | "
+            f"B1={len(b1)} B2={len(b2)} Bsum={len(bsum)} ==="
+        )
+
+        for name, url in targets.items():
+            for track, samples in (("B1", b1), ("B2", b2), ("Bsum", bsum)):
+                subset = (
+                    samples[: 2 * args.ragas_limit] if name.startswith("ragas") else samples
+                )
+                print(f"== {name} / {track} ({len(subset)} samples) ==")
+                tag = f"{name}_{track}_r{run_i}"
+                res = run_system(tag, url, subset, out_dir, args.timeout)
+                entry = {
+                    "n": len(res),
+                    **prf1(res),
+                    "auroc": auroc(res),
+                    **latency_stats(res),
+                    "llm_calls_total": sum(int(r.get("llm_calls") or 0) for r in res),
+                    "errors": sum(1 for r in res if r.get("error")),
+                    "seed": seed,
+                }
+                run_entries.setdefault((name, track), []).append(entry)
+                print(f"   {entry}")
+
+    for (name, track), entries in run_entries.items():
+        summary["systems"].setdefault(name, {})[track] = _median_entry(entries)
 
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
-    # markdown scoreboard
-    lines = ["# Comparative benchmark scoreboard", "",
-             f"Created: {summary['created']}  |  B1 n={summary['n_b1']}  B2 n={summary['n_b2']}", "",
-             "| system | track | n | F1 | precision | recall | AUROC | p50 ms | p95 ms | LLM calls | errors |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = [
+        "# Comparative benchmark scoreboard",
+        "",
+        f"Created: {summary['created']}  |  runs={summary['runs']} (median)  |  "
+        f"B1 n={summary['n_b1']}  B2 n={summary['n_b2']}",
+        "",
+        "| system | track | n | F1 | precision | recall | AUROC | p50 ms | p95 ms | LLM calls | errors |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
     for name, tracks in summary["systems"].items():
         for track, e in tracks.items():
             lines.append(
                 f"| {name} | {track} | {e['n']} | {e['f1']} | {e['precision']} | {e['recall']} "
                 f"| {e['auroc']} | {e['p50_ms']} | {e['p95_ms']} | {e['llm_calls_total']} | {e['errors']} |"
             )
-    lines += ["", "Latency is shim-internal (network excluded). RAGAS runs a reduced subset "
-              "(pinned local judge is slow); its row is comparable on quality, not throughput.",
-              "Fairness rules: docs/BENCHMARKS.md § Comparative suite."]
+    lines += [
+        "",
+        "Latency is shim-internal (network excluded). When --runs>1, F1/AUROC/latency are medians.",
+        "Fairness rules: docs/BENCHMARKS.md § Comparative suite.",
+    ]
     (out_dir / "scoreboard.md").write_text("\n".join(lines), encoding="utf-8")
     print(f"\nWrote {out_dir / 'summary.json'} and {out_dir / 'scoreboard.md'}")
     return 0
