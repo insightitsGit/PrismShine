@@ -1,0 +1,18 @@
+# Whitelist-only context for ACI image (avoids double-shipping ONNX via models/).
+*
+!pyproject.toml
+!README.md
+!prismshine/
+!prismshine/**
+!bench/
+!bench/shims/
+!bench/shims/prismshine/
+!bench/shims/prismshine/**
+!benchmarks/
+!benchmarks/calibration/
+!benchmarks/calibration/halueval_minilm.json
+
+# Drop noise under the shim tree if any
+bench/shims/prismshine/**/__pycache__
+**/__pycache__
+**/*.pyc
