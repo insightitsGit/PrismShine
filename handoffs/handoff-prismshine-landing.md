@@ -66,6 +66,7 @@ prismshine capabilities
 | Benchmarks doc | https://github.com/insightitsGit/PrismShine/blob/main/docs/BENCHMARKS.md |
 | Receipt (HHEM) | https://github.com/insightitsGit/PrismShine/tree/main/benchmarks/progress/2026-07-20_run4_onnx |
 | Integration | https://github.com/insightitsGit/PrismShine/blob/main/docs/INTEGRATION.md |
+| Interactive demo | https://insightitsgit.github.io/PrismShine/demo.html |
 | Contact | https://www.insightits.com/#contact · `info@insightits.com` |
 
 ---
@@ -87,10 +88,10 @@ Follow Hormozi / ChorusGraph sections. **First viewport:** brand **PrismShine** 
   - B1 p50 **90 ms** vs HHEM **216 ms**  
   - `pip install "prismshine==0.2.0"`  
 - **CTAs:**  
-  1. Primary: `pip` / GitHub README  
-  2. Secondary: Book 30-min **Verifier Stack Audit** → `#contact`  
-  3. Secondary: Benchmarks receipt  
-  4. Secondary: View on GitHub  
+  1. Primary: Try interactive demo → https://insightitsgit.github.io/PrismShine/demo.html  
+  2. Secondary: `pip` / GitHub README  
+  3. Secondary: Book 30-min **Verifier Stack Audit** → `#contact`  
+  4. Secondary: Benchmarks receipt  
 
 ### 2. The pain (3 cards)
 
@@ -237,6 +238,9 @@ Mirror how `chorusgraph` / `prismguard` were added:
 - Building a browser interactive demo (follow-up).  
 - Changing PyPI package contents.  
 - Publishing firm price list without finance sign-off (estimates only).  
+
+**Update (2026-07-20):** Interactive GitHub Pages demo shipped —  
+https://insightitsgit.github.io/PrismShine/demo.html (source: `docs/demo.html`). Wire this URL into the landing hero CTA and catalog `interactiveDemo` field.
 
 ---
 

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PrismShine — Live Verdict Demo</title>
+  <meta name="description" content="Interactive demo: grounded answers get a named resolution_gate; fabricated numbers and empty retrieval halt with an audit trail — not a shrug score." />
+  <link rel="canonical" href="https://insightitsgit.github.io/PrismShine/demo.html" />
+  <meta property="og:title" content="PrismShine — Live Verdict Demo" />
+  <meta property="og:description" content="Cause-side halt + grounding verify. Named resolution_gate on every decision." />
+  <meta property="og:url" content="https://insightitsgit.github.io/PrismShine/demo.html" />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c1222;
+      --grid: #141c2e;
+      --border: #2a3548;
+      --text: #e8eef7;
+      --muted: #8b9bb4;
+      --green: #3dd68c;
+      --red: #ff6b6b;
+      --mint: #7ee0b0;
+      --amber: #f0c14b;
+      --accent: #6cb6ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, #1a2a4a 0%, transparent 55%),
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: auto, 24px 24px, 24px 24px;
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem 3rem;
+    }
+    .wrap { max-width: 820px; margin: 0 auto; }
+    .brand {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.65rem;
+    }
+    h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.35rem; line-height: 1.25; }
+    .sub {
+      color: var(--green);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.45;
+    }
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      background: #080d18;
+    }
+    .card.bad { border-color: #ff6b6b55; }
+    .card.good { border-color: #3dd68c55; }
+    .card h3 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.4rem;
+    }
+    .card.bad h3 { color: var(--red); }
+    .card.good h3 { color: var(--green); }
+    .score { font-size: 2rem; font-family: "JetBrains Mono", monospace; color: var(--muted); }
+    .gate {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--mint);
+      line-height: 1.55;
+    }
+    .terminal {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #080d18;
+      margin-bottom: 1rem;
+    }
+    .term-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: #121a2b;
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #28c840; }
+    .term-title { margin-left: 8px; font-size: 0.75rem; color: var(--muted); }
+    .term-body {
+      padding: 1.25rem 1.25rem 1.5rem;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      min-height: 240px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .prompt { color: var(--green); }
+    .out { color: var(--text); }
+    .allow { color: var(--green); font-weight: 600; }
+    .block { color: var(--red); font-weight: 600; }
+    .halt { color: var(--amber); font-weight: 600; }
+    .dim { color: var(--muted); }
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1.1em;
+      background: var(--green);
+      animation: blink 1s step-end infinite;
+      vertical-align: text-bottom;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    button {
+      font-family: "IBM Plex Sans", sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #1a2438;
+      color: var(--text);
+      cursor: pointer;
+    }
+    button:hover { background: #243044; }
+    button.primary { background: var(--green); color: #0c1222; border-color: var(--green); }
+    button.primary:hover { filter: brightness(1.08); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .step-label { font-size: 0.8rem; color: var(--muted); margin-left: 0.25rem; }
+    .progress { display: flex; gap: 6px; margin-bottom: 1rem; }
+    .pip { flex: 1; height: 3px; border-radius: 2px; background: var(--border); transition: background 0.2s; }
+    .pip.on { background: var(--green); }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+    .cta-row a {
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.6rem 1.1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .cta-row a.primary { background: var(--green); color: #0c1222; border-color: var(--green); }
+    .cta-row a:hover { filter: brightness(1.06); }
+    .caption { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; min-height: 2.5em; }
+    .proof {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 1.25rem;
+      padding: 0.75rem 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      line-height: 1.5;
+    }
+    .proof strong { color: var(--text); }
+    footer { margin-top: 2rem; font-size: 0.75rem; color: var(--muted); text-align: center; }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="brand">PrismShine</p>
+    <h1>Hallucinations in prod.</h1>
+    <p class="sub">Named resolution_gate — not 0.62 and a shrug.<br />Halt broken preloads before tokens burn.</p>
+
+    <div class="compare">
+      <div class="card bad">
+        <h3>Most checkers</h3>
+        <div class="score">0.62</div>
+        <div class="dim">hallucinated? grounded? 🤷</div>
+      </div>
+      <div class="card good">
+        <h3>PrismShine</h3>
+        <div class="gate">
+          decision: block<br />
+          resolution_gate: T1_UNMATCHED_HARD_FACT<br />
+          evidence_hash: sha256:…
+        </div>
+      </div>
+    </div>
+
+    <div class="progress" id="progress"></div>
+
+    <div class="terminal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">prismshine — live capture v0.2.0</span>
+      </div>
+      <div class="term-body" id="screen"><span class="cursor"></span></div>
+    </div>
+
+    <p class="caption" id="caption"></p>
+
+    <div class="controls">
+      <button type="button" id="prev" disabled>← Back</button>
+      <button type="button" class="primary" id="next">Next step →</button>
+      <button type="button" id="play">▶ Play all</button>
+      <span class="step-label" id="stepLabel">Step 1 / 6</span>
+    </div>
+
+    <div class="proof">
+      <strong>Receipt (Azure ACI, 2026-07-20):</strong>
+      vs HHEM-2.1-Open — B1 QA F1 <strong>0.831</strong> vs 0.746 · B2 numbers <strong>1.000 / 0 FP</strong> · B1 p50 <strong>90 ms</strong> vs 216 ms · 0 LLM calls.
+      <a href="https://github.com/insightitsGit/PrismShine/tree/main/benchmarks/progress/2026-07-20_run4_onnx">Full receipt →</a>
+    </div>
+
+    <div class="cta-row">
+      <a class="primary" href="https://pypi.org/project/prismshine/0.2.0/">pip install prismshine</a>
+      <a href="https://github.com/insightitsGit/PrismShine">GitHub</a>
+      <a href="https://github.com/insightitsGit/PrismShine/blob/main/README.md">Install docs</a>
+      <a href="https://www.insightits.com/#contact">Book verifier audit</a>
+    </div>
+
+    <footer>
+      Apache-2.0 · Self-hosted · PASS ≠ world-true (grounded in preload) ·
+      <a href="https://github.com/insightitsGit/PrismShine/blob/main/docs/LIMITS.md">Limits</a>
+    </footer>
+  </div>
+
+  <script>
+    const STEPS = [
+      {
+        caption: "Install PrismShine from PyPI — Apache-2.0, zero LLM on the default path.",
+        lines: [
+          { t: "prompt", s: '$ pip install "prismshine==0.2.0"' },
+          { t: "out", s: "Successfully installed prismshine-0.2.0" },
+          { t: "dim", s: "" }
+        ]
+      },
+      {
+        caption: "Check capabilities — span backend and threshold status are honest.",
+        lines: [
+          { t: "prompt", s: "$ prismshine capabilities" },
+          { t: "out", s: "{" },
+          { t: "out", s: '  "span_backend": "lexical",' },
+          { t: "out", s: '  "threshold_status": "proposal",' },
+          { t: "out", s: '  "pass_means": "grounded_in_preload_not_world_truth",' },
+          { t: "out", s: '  "judge": null' },
+          { t: "out", s: "}" },
+          { t: "dim", s: "# pin PRISMSHINE_SPAN_ONNX for Tier-3 SotA spans" }
+        ]
+      },
+      {
+        caption: "Grounded answer — PASS with a named resolution_gate.",
+        lines: [
+          { t: "prompt", s: "$ python - <<'PY'" },
+          { t: "dim", s: "# verify: answer matches preload revenue figure" },
+          { t: "out", s: "decision=pass" },
+          { t: "allow", s: "resolution_gate=CLEAN_FAST_PATH" },
+          { t: "out", s: "fused_score=0.12" },
+          { t: "out", s: "evidence_hash=sha256:a1b2…c9d0" },
+          { t: "dim", s: "" }
+        ]
+      },
+      {
+        caption: "Fabricated number — BLOCKED. Tier-1 copy-check. Not 0.62.",
+        lines: [
+          { t: "prompt", s: '# preload: "Q2 revenue was $1,200,000."' },
+          { t: "prompt", s: '# answer:  "Q2 revenue was $9,999,000."' },
+          { t: "block", s: "decision=block" },
+          { t: "out", s: "resolution_gate=T1_UNMATCHED_HARD_FACT" },
+          { t: "out", s: "signatures=[UNMATCHED_NUMBER]" },
+          { t: "out", s: "advice: Refuse or regenerate with the preload figure." },
+          { t: "dim", s: "" }
+        ]
+      },
+      {
+        caption: "Cause-side moat — empty retrieval HALTS before the LLM is called.",
+        lines: [
+          { t: "prompt", s: "$ # pre_llm_check(gate, state)  # docs=[], n_chunks=0" },
+          { t: "halt", s: "action=halt" },
+          { t: "out", s: "decision=block" },
+          { t: "out", s: "resolution_gate=HANDBOOK:EMPTY_RETRIEVAL" },
+          { t: "out", s: "llm_calls=0   # tokens never spent" },
+          { t: "dim", s: "# encoder tools never see this — they only score the final text" }
+        ]
+      },
+      {
+        caption: "Two minutes to try. Beat HHEM on HaluEval QA — receipt linked below.",
+        lines: [
+          { t: "out", s: 'pip install "prismshine==0.2.0"' },
+          { t: "out", s: "prismshine capabilities" },
+          { t: "out", s: "python examples/enterprise_wiring_demo.py" },
+          { t: "dim", s: "" },
+          { t: "out", s: "→ github.com/insightitsGit/PrismShine" },
+          { t: "out", s: "→ pypi.org/project/prismshine/0.2.0" }
+        ]
+      }
+    ];
+
+    let step = 0;
+    let playing = false;
+    const screen = document.getElementById("screen");
+    const caption = document.getElementById("caption");
+    const progress = document.getElementById("progress");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+    const playBtn = document.getElementById("play");
+    const stepLabel = document.getElementById("stepLabel");
+
+    STEPS.forEach(() => {
+      const p = document.createElement("div");
+      p.className = "pip";
+      progress.appendChild(p);
+    });
+
+    function cls(type) {
+      return {
+        prompt: "prompt",
+        out: "out",
+        allow: "allow",
+        block: "block",
+        halt: "halt",
+        dim: "dim",
+      }[type] || "out";
+    }
+
+    function renderText(lines) {
+      return lines.map((l) => {
+        if (!l.s) return "\n";
+        return `<span class="${cls(l.t)}">${escapeHtml(l.s)}</span>\n`;
+      }).join("");
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function showStep(i, animate) {
+      step = i;
+      const s = STEPS[i];
+      caption.textContent = s.caption;
+      stepLabel.textContent = `Step ${i + 1} / ${STEPS.length}`;
+      prevBtn.disabled = i === 0;
+      nextBtn.disabled = i === STEPS.length - 1;
+      nextBtn.textContent = i === STEPS.length - 1 ? "Done" : "Next step →";
+      [...progress.children].forEach((el, j) => {
+        el.classList.toggle("on", j <= i);
+      });
+
+      if (!animate) {
+        screen.innerHTML = renderText(s.lines);
+        return;
+      }
+
+      screen.innerHTML = "";
+      let lineIdx = 0;
+      let charIdx = 0;
+      const full = s.lines;
+
+      function typeTick() {
+        if (lineIdx >= full.length) return;
+        const line = full[lineIdx];
+        if (charIdx === 0) {
+          const span = document.createElement("span");
+          span.className = cls(line.t);
+          span.id = "line-" + lineIdx;
+          screen.appendChild(span);
+          if (lineIdx < full.length - 1 || line.s) {
+            screen.appendChild(document.createTextNode("\n"));
+          }
+        }
+        const span = document.getElementById("line-" + lineIdx);
+        if (!line.s) {
+          lineIdx++;
+          charIdx = 0;
+          setTimeout(typeTick, animate ? 40 : 0);
+          return;
+        }
+        span.textContent = line.s.slice(0, charIdx + 1);
+        charIdx++;
+        if (charIdx >= line.s.length) {
+          lineIdx++;
+          charIdx = 0;
+        }
+        setTimeout(typeTick, line.t === "prompt" ? 18 : 12);
+      }
+      typeTick();
+    }
+
+    prevBtn.addEventListener("click", () => {
+      playing = false;
+      showStep(step - 1, false);
+    });
+    nextBtn.addEventListener("click", () => {
+      playing = false;
+      if (step < STEPS.length - 1) showStep(step + 1, true);
+    });
+    playBtn.addEventListener("click", async () => {
+      playing = true;
+      for (let i = 0; i < STEPS.length; i++) {
+        if (!playing) break;
+        showStep(i, true);
+        await new Promise((r) => setTimeout(r, i === 3 || i === 4 ? 3400 : 2400));
+      }
+      playing = false;
+    });
+
+    showStep(0, true);
+  </script>
+</body>
+</html>

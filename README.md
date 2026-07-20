@@ -12,6 +12,8 @@ pip install "prismshine==0.2.0"
 prismshine capabilities
 ```
 
+**Interactive demo:** [insightitsGit.github.io/PrismShine/demo.html](https://insightitsgit.github.io/PrismShine/demo.html) — terminal walkthrough (grounded pass → fabricated number block → empty-retrieval halt). No API key.
+
 > **PASS ≠ world-true.** A `pass` means the answer is grounded in the **preload you provided**, not that the preload is factually correct. See [`docs/LIMITS.md`](docs/LIMITS.md).
 
 ---
