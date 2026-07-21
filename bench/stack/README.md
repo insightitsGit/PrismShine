@@ -31,9 +31,9 @@ Guard’s README headline example is `web_chat` (“rules-first, no surprise ONN
 
 `insight-stack` is pinned to **`law_pilot` + ONNX + `prismrag-patch` + feedback persist + ChorusGraph** (not `security_bench`: that factory forces HashEmbedder / `skip_taxonomy`). Hard-block only on **S1**; H1/R1 always reach Shine so Guard FPs cannot zero the runtime track (run2 bug).
 
-Deps install `prismrag-patch` beside `prismguard[guard-model]>=0.1.8` and **`prismlib-plus` via ChorusGraph** — never `prismguard[prism]` (pulls bare `prismlib` and collides with plus).
+Deps install `prismrag-patch` beside `prismguard[guard-model]>=0.1.9` and **`prismlib-plus` via ChorusGraph** — never `prismguard[prism]` (pulls bare `prismlib` and collides with plus).
 
-**Pin:** use [`prismguard 0.1.8`](https://pypi.org/project/prismguard/0.1.8/) (or newer) for stack ACI rebuilds — DX / docs fixes from the Guard handoffs land there.
+**Pin:** use [`prismguard 0.1.9`](https://pypi.org/project/prismguard/0.1.9/) (or newer) for stack ACI rebuilds — DX / docs fixes from the Guard handoffs land there.
 
 ### Learn-from-DB / customer words (env)
 

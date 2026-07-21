@@ -52,7 +52,7 @@ See `bench/stack/README.md`. Public claims use this comparative suite + `docs/BE
 `bench/runtime/` — **no Guard**. ChorusGraph+PrismShine vs LangGraph+HHEM /
 MiniLM / **LettuceDetect** on H1 / R1 / P1. See [`bench/runtime/README.md`](runtime/README.md).
 
-Stack suite (`bench/stack/`) uses **[`prismguard>=0.1.8`](https://pypi.org/project/prismguard/0.1.8/)**
+Stack suite (`bench/stack/`) uses **[`prismguard>=0.1.9`](https://pypi.org/project/prismguard/0.1.9/)**
 for Guard→ChorusGraph→Shine QA (S1 included).
 
 ```powershell

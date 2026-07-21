@@ -4,7 +4,7 @@
 grounding) without PrismGuard. Complements the public content-only Shine vs HHEM
 suite (`bench/`, `docs/BENCHMARKS.md`) and stays separate from the INTERNAL
 Guard+ChorusGraph+Shine package QA (`bench/stack/`, now pinned to
-[`prismguard==0.1.8`](https://pypi.org/project/prismguard/0.1.8/)).
+[`prismguard==0.1.9`](https://pypi.org/project/prismguard/0.1.9/)).
 
 | System | Role | Sees ledger `evidence`? |
 |--------|------|-------------------------|
@@ -21,7 +21,7 @@ Guard+ChorusGraph+Shine package QA (`bench/stack/`, now pinned to
 | **R1** | Injected runtime failures (empty retrieval, tool error, stale cache, …) | Only evidence-aware systems can catch these |
 | **P1** | Latency / LLM calls (derived) | Cost / speed story |
 
-No **S1** (prompt injection) — that is Guard’s lane / `bench/stack/` (use **PrismGuard 0.1.8+**).
+No **S1** (prompt injection) — that is Guard’s lane / `bench/stack/` (use **PrismGuard 0.1.9+**).
 
 ## Local
 

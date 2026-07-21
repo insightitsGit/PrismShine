@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | PyPI | `prismguard` |
-| Version | 0.1.8 (PyPI; prefer `>=0.1.8` for stack benches) |
+| Version | 0.1.9 (PyPI; prefer `>=0.1.9` for stack benches) |
 | License | Apache-2.0 (open-core; Team/Business features gated by Ed25519 license) |
 | Python | >= 3.11 |
 | Local path | `C:\code\PrismGaurd` (folder misspelled; GitHub is PrismGuard) |

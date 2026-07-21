@@ -1,0 +1,5 @@
+{
+    "oss-llmguard":  "http://oss-llmguard-bx7k2m.eastus.azurecontainer.io:8000",
+    "insight-stack":  "http://insight-stack-bx7k2m.eastus.azurecontainer.io:8000",
+    "oss-langgraph-hhem":  "http://oss-lg-hhem-bx7k2m.centralus.azurecontainer.io:8000"
+}

@@ -4,6 +4,34 @@ How PrismShine attaches to each sibling library. Verified against the KB (`kb/li
 
 ---
 
+## 0. Drop-in chat / RAG (no graph rewrite)
+
+Same pattern as PrismGuard: lazy singleton + env flags + meta on the reply.
+
+```python
+from prismshine import validate_grounding, get_gate
+
+result = validate_grounding(
+    question=q,
+    answer=draft,
+    contexts=kb_context,  # or web snippets; source="kb"|"web"|"docs" accepted
+)
+if result["blocked"]:
+    draft = result["answer"]
+reply_meta["prismshine"] = result["meta"]
+```
+
+| Concern | Default / fix |
+|---|---|
+| Preload `source` must be canonical | **Aliases accepted** — `kb`/`web`/`docs`/`rag` → `retrieval`, `chat` → `history`, … (`normalize_chunk_source`) |
+| Tier-3 without ONNX | Honest `span_backend=lexical\|unavailable` + `meta["span_note"]`; for run4 parity: `pip install "prismshine[spans]"` + `python -m prismshine.tools.ensure_span_onnx --export` |
+| Flag noise if you block on every soft miss | **`PRISMSHINE_ENFORCE` default = `block`** (halt only on `decision=block`); `0`/`shadow` = observe only; `flag`/`strict` = also halt on flag |
+| Ship without risking chat | `PRISMSHINE_ENFORCE=0` shadow mode |
+
+`get_gate()` is a process-wide lazy singleton (reset with `get_gate(reset=True)`).
+
+---
+
 ## 1. ChorusGraph (primary host) — `prismshine[chorusgraph]`
 
 ### Attach points

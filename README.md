@@ -68,7 +68,30 @@ pip install prismshine                 # core path
 # Optional — full Tier-3 span classifier (same as public run4 receipt):
 # pip install "prismshine[spans]"
 # python -m prismshine.tools.ensure_span_onnx --export
+# set PRISMSHINE_SPAN_ONNX=.../model.onnx
+# set PRISMSHINE_SPAN_TOKENIZER=.../tokenizer.json
 ```
+
+### Drop-in (chat / RAG — PrismGuard-style)
+
+```python
+from prismshine import validate_grounding
+
+# After you already have kb_context / web snippets:
+result = validate_grounding(
+    question=user_q,
+    answer=draft_answer,
+    contexts=kb_or_web_snippets,  # list[str] or dicts; source="kb"|"web"|"docs" OK
+)
+# Default enforce = block-only (flags do not halt). Shadow: PRISMSHINE_ENFORCE=0
+if result["blocked"]:
+    draft_answer = result["answer"]
+meta["prismshine"] = result["meta"]  # decision, resolution_gate, evidence_hash, span_backend
+```
+
+`source` aliases (`kb`, `web`, `docs`, `rag`, …) normalize to `retrieval`. Without ONNX, `meta["span_note"]` explains the lexical/unavailable path.
+
+### Full API
 
 ```python
 from prismshine import EvidenceBundle, PreloadChunk, ShineGate

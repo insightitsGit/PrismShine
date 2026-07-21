@@ -224,7 +224,7 @@ Fair head-to-head for “agent runtime + verifier” vs typical LangGraph-shaped
 Tracks: **H1** (HaluEval F1), **R1** (injected runtime failures — evidence-aware), **P1** (latency). No S1.
 
 **PrismGuard** belongs in `bench/stack/` (S1 + Guard→Shine path), pinned to
-[`prismguard>=0.1.8`](https://pypi.org/project/prismguard/0.1.8/) — not this runtime scoreboard.
+[`prismguard>=0.1.9`](https://pypi.org/project/prismguard/0.1.9/) — not this runtime scoreboard.
 
 ```powershell
 docker compose -f bench/compose.runtime.yaml up --build -d
