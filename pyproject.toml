@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prismshine"
-version = "0.2.1"
+version = "0.2.2"
 description = "Anti-hallucination verdict engine: cause-side forensics + grounding verification in one auditable gate."
 readme = "README.md"
 requires-python = ">=3.11"

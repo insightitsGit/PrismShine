@@ -1,13 +1,18 @@
 # PrismShine changelog
 
-## 0.2.1 — packaging + install honesty (2026-07-20)
+## 0.2.2 — drop-in DX + runtime receipt (2026-07-21)
+
+- **Drop-in DX:** `validate_grounding` / `get_gate` / `enforce_mode_from_env` (shadow via `PRISMSHINE_ENFORCE=0`, default enforce=`block` only); preload `source` aliases (`kb`/`web`/`docs`/`rag` → `retrieval`).
+- **PrismGuard pin:** stack / `[guard]` extra → `prismguard>=0.1.9` ([PyPI](https://pypi.org/project/prismguard/0.1.9/)).
+- **Runtime suite receipt:** ChorusGraph+PrismShine vs LangGraph+HHEM / MiniLM / LettuceDetect — `benchmarks/progress/2026-07-20_runtime_docker/` (H1 F1 0.895, R1 catch 1.0, p50 1.7 ms).
+- **Docs:** README + `docs/INTEGRATION.md` §0 drop-in path; demo + version badges track 0.2.2.
+
+## 0.2.1 — packaging + install honesty (2026-07-21)
 
 - **Sdist trim:** hatch `only-include` for `prismshine` / `tests` / `examples` / docs text — excludes `bench/`, `benchmarks/`, `kb/`, doc images, and baked tokenizer/ONNX so from-source installs stay lean (0.2.0 sdist was ~20 MB).
 - **Docs:** README install section now calls out bare `pip install prismshine` vs enterprise `prismshine[spans]` + `python -m prismshine.tools.ensure_span_onnx` (Tier-3 / run4-parity path; bare install degrades via `MISSING_CAPABILITY_FLAG`).
 - **CLI harden:** `verify` / `feedback` accept UTF-8 BOM JSON; missing/invalid inputs return exit 2 with a clear stderr message (no traceback); `prismshine verify --demo` uses a **packaged** sample (works after pip/git install); README no longer points at a fake `path/to/bundle.json`.
-- **Runtime suite:** `bench/runtime/` — ChorusGraph+PrismShine vs LangGraph+HHEM / MiniLM / **LettuceDetect** (H1/R1/P1, no Guard). Smoke: `python -m bench.runtime.smoke_local`.
-- **PrismGuard pin:** stack / `[guard]` extra → `prismguard>=0.1.9` ([PyPI](https://pypi.org/project/prismguard/0.1.9/)).
-- **Drop-in DX:** `validate_grounding` / `get_gate` (shadow via `PRISMSHINE_ENFORCE=0`, default enforce=`block` only); preload `source` aliases (`kb`/`web`/`docs` → `retrieval`).
+- **Runtime suite (code):** `bench/runtime/` — ChorusGraph+PrismShine vs LangGraph+HHEM / MiniLM / **LettuceDetect** (H1/R1/P1, no Guard). Smoke: `python -m bench.runtime.smoke_local`.
 
 ## 0.2.0 — enterprise hardening (2026-07-20)
 

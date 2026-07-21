@@ -3,12 +3,12 @@
 [![PyPI](https://img.shields.io/pypi/v/prismshine.svg)](https://pypi.org/project/prismshine/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-informational)](https://pypi.org/project/prismshine/)
+[![Version](https://img.shields.io/badge/version-0.2.2-informational)](https://pypi.org/project/prismshine/)
 
 **Anti-hallucination verdict engine — cause-side forensics + effect-side grounding in one auditable gate.**
 
 ```bash
-pip install "prismshine==0.2.1"          # core — Tiers 0–2 (CPU, zero LLM)
+pip install "prismshine==0.2.2"          # core — Tiers 0–2 (CPU, zero LLM)
 prismshine capabilities
 prismshine verify --demo                 # packaged sample — works after pip/git install
 ```
@@ -394,16 +394,17 @@ prismshine bench --suite all --report benchmarks/reports
 pip install build twine
 python -m build
 twine check dist/*
-# twine upload dist/*    # after tag v0.2.1 — requires PyPI credentials
+# twine upload dist/*    # after tag v0.2.2 — requires PyPI credentials
 ```
 
-Git: commit on `main`, tag `v0.2.1`, push tag when ready. **Do not force-push `main`.**
+Git: commit on `main`, tag `v0.2.2`, push tag when ready. **Do not force-push `main`.**
 
 ---
 
 ## Status
 
-**0.2.1** — packaging hygiene (lean sdist) + install honesty for Tier-3 `[spans]`.  
+**0.2.2** — drop-in DX (`validate_grounding` / `get_gate`), Guard `>=0.1.9`, runtime Docker receipt.  
+**0.2.1** — packaging hygiene (lean sdist) + install honesty for Tier-3 `[spans]` + `verify --demo`.  
 **0.2.0** — enterprise-ready open source for the self-hosted fast verifier lane (HaluEval vs HHEM receipt + FIX hardening). Category-creator / beats-LLM-judge claims still need production wiring receipts and a fair judge comparator row.
 
 License: Apache-2.0 · Author: Insight IT Solutions LLC · PyPI: [prismshine](https://pypi.org/project/prismshine/) · GitHub: [insightitsGit/PrismShine](https://github.com/insightitsGit/PrismShine)

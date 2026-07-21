@@ -24,7 +24,7 @@ from prismshine.wiring import (
     wrap_llm,
 )
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     "ShineGate",
