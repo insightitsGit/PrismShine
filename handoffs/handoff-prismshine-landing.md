@@ -3,7 +3,7 @@
 **To:** Website / InsightitsAIAgent agent  
 **From:** PrismShine maintainers  
 **Date:** 2026-07-20  
-**Priority:** High — product live on PyPI as [`prismshine==0.2.0`](https://pypi.org/project/prismshine/0.2.0/)  
+**Priority:** High — product live on PyPI as [`prismshine==0.2.2`](https://pypi.org/project/prismshine/0.2.2/)  
 **Repo to edit:** `C:\code\InsightitsAIAgent` (same pattern as ChorusGraph + PrismGuard product pages)  
 **Canonical URL (target):** `https://www.insightits.com/products/prismshine.html`
 
@@ -52,7 +52,7 @@ Ship a **company-site product landing page** for PrismShine that:
 **Install:**
 
 ```bash
-pip install "prismshine==0.2.0"
+pip install "prismshine==0.2.2"
 prismshine capabilities
 ```
 
@@ -60,7 +60,7 @@ prismshine capabilities
 
 | Resource | URL |
 |----------|-----|
-| PyPI | https://pypi.org/project/prismshine/0.2.0/ |
+| PyPI | https://pypi.org/project/prismshine/0.2.2/ |
 | GitHub | https://github.com/insightitsGit/PrismShine |
 | README | https://github.com/insightitsGit/PrismShine/blob/main/README.md |
 | Benchmarks doc | https://github.com/insightitsGit/PrismShine/blob/main/docs/BENCHMARKS.md |
@@ -86,7 +86,7 @@ Follow Hormozi / ChorusGraph sections. **First viewport:** brand **PrismShine** 
   - B1 QA F1 **0.831** vs HHEM **0.746**  
   - B2 numbers F1 **1.000 / 0 FP**  
   - B1 p50 **90 ms** vs HHEM **216 ms**  
-  - `pip install "prismshine==0.2.0"`  
+  - `pip install "prismshine==0.2.2"`  
 - **CTAs:**  
   1. Primary: Try interactive demo → https://insightitsgit.github.io/PrismShine/demo.html  
   2. Secondary: `pip` / GitHub README  
@@ -118,7 +118,7 @@ Footnote: Absolute Bsum is still modest; do not claim “beats all judges.” No
 
 ### 5. Plan — three steps
 
-1. **Install** — `pip install "prismshine==0.2.0"`  
+1. **Install** — `pip install "prismshine==0.2.2"`  
 2. **Verify** — `ShineGate.verify(EvidenceBundle(...))` or `prismshine verify bundle.json`  
 3. **Wire the moat** — `pre_llm_check` / `shine_verify_node` (or ChorusGraph `require_shine`) so Tier-0 can halt before generation  
 
@@ -173,7 +173,7 @@ One line: Complements **PrismGuard** (input) + **ChorusGraph** (runtime) + **Pri
 Mirror how `chorusgraph` / `prismguard` were added:
 
 1. **Catalog** — `src/pages/products/productCatalog.js`  
-   - Add `PRISMSHINE_EXTERNAL` URLs (pypi pin 0.2.0, github, benchmarks, audit CTA).  
+   - Add `PRISMSHINE_EXTERNAL` URLs (pypi pin 0.2.2, github, benchmarks, audit CTA).  
    - Add `PRODUCT_CATALOG.prismshine` with `isPlatformProduct: true`, shortName, description, installHint, hero image path (create logo assets under `images/NewDesign/` or reuse a Prism-family mark until brand art exists).  
 
 2. **Pricing plans** — `productPricingPlans.js`  
@@ -216,7 +216,7 @@ Mirror how `chorusgraph` / `prismguard` were added:
 ## Suggested hero SEO
 
 - **Title:** `PrismShine — Anti-Hallucination Verdict Engine [Free Apache-2.0]`  
-- **Meta description:** `Self-hosted grounding + cause-side forensics. Beats HHEM on HaluEval QA (F1 0.831 vs 0.746) at half the latency. pip install prismshine==0.2.0.`  
+- **Meta description:** `Self-hosted grounding + cause-side forensics. Beats HHEM on HaluEval QA (F1 0.831 vs 0.746) at half the latency. pip install prismshine==0.2.2.`  
 - **Keywords:** hallucination detection, RAG grounding, anti-hallucination Python, LettuceDetect alternative, HHEM alternative, agent answer verification, resolution_gate, PrismShine, Insight IT Solutions  
 
 ---
