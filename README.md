@@ -26,6 +26,9 @@ python -m prismshine.tools.ensure_span_onnx --export
 
 ---
 
+
+**Keywords:** anti-hallucination verifier, empty retrieval detection, grounding gate, VERIFY grounding, HaluEval, self-hosted answer checker, PrismShine
+
 ## What is PrismShine?
 
 PrismShine is a **self-hosted verifier** for agent / RAG answers. It catches hallucinations from both ends:
@@ -408,3 +411,13 @@ Git: commit on `main`, tag `v0.2.2`, push tag when ready. **Do not force-push `m
 **0.2.0** — enterprise-ready open source for the self-hosted fast verifier lane (HaluEval vs HHEM receipt + FIX hardening). Category-creator / beats-LLM-judge claims still need production wiring receipts and a fair judge comparator row.
 
 License: Apache-2.0 · Author: Insight IT Solutions LLC · PyPI: [prismshine](https://pypi.org/project/prismshine/) · GitHub: [insightitsGit/PrismShine](https://github.com/insightitsGit/PrismShine)
+
+---
+
+## Links
+
+- Author: **Amin Parva** ([insightits.info@gmail.com](mailto:insightits.info@gmail.com))
+- Company: [https://www.insightits.com](https://www.insightits.com)
+- GitHub: https://github.com/insightitsGit/PrismShine
+- PyPI: https://pypi.org/project/prismshine/
+- Product page: https://www.insightits.com/products/prismshine.html
